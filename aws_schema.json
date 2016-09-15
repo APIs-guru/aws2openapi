@@ -1,0 +1,407 @@
+{
+  "required": [
+    "metadata",
+    "operations",
+    "shapes"
+  ],
+  "properties": {
+    "shapes": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "properties": {
+            "required": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "members": {
+              "required": [],
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "properties": {
+                    "documentation": {
+                      "type": "string"
+                    },
+                    "shape": {
+                      "type": "string"
+                    },
+                    "locationName": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "xmlNamespace": {
+                      "required": [
+                        "uri"
+                      ],
+                      "properties": {
+                        "uri": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "xmlAttribute": {
+                      "type": "boolean"
+                    },
+                    "idempotencyToken": {
+                      "type": "boolean"
+                    },
+                    "box": {
+                      "type": "boolean"
+                    },
+                    "queryName": {
+                      "type": "string"
+                    },
+                    "deprecated": {
+                      "type": "boolean"
+                    },
+                    "streaming": {
+                      "type": "boolean"
+                    },
+                    "flattened": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "type": {
+              "type": "string"
+            },
+            "documentation": {
+              "type": "string"
+            },
+            "min": {},
+            "max": {},
+            "member": {
+              "required": [
+                "shape"
+              ],
+              "properties": {
+                "locationName": {
+                  "type": "string"
+                },
+                "shape": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "exception": {
+              "type": "boolean"
+            },
+            "fault": {
+              "type": "boolean"
+            },
+            "wrapper": {
+              "type": "boolean"
+            },
+            "error": {
+              "required": [
+                "httpStatusCode"
+              ],
+              "properties": {
+                "httpStatusCode": {
+                  "type": "integer"
+                },
+                "senderFault": {
+                  "type": "boolean"
+                },
+                "code": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "enum": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "payload": {
+              "type": "string"
+            },
+            "value": {
+              "required": [
+                "shape"
+              ],
+              "properties": {
+                "shape": {
+                  "type": "string"
+                },
+                "locationName": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "key": {
+              "required": [
+                "shape"
+              ],
+              "properties": {
+                "shape": {
+                  "type": "string"
+                },
+                "locationName": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "sensitive": {
+              "type": "boolean"
+            },
+            "xmlNamespace": {
+              "required": [
+                "prefix",
+                "uri"
+              ],
+              "properties": {
+                "prefix": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "deprecated": {
+              "type": "boolean"
+            },
+            "flattened": {
+              "type": "boolean"
+            },
+            "streaming": {
+              "type": "boolean"
+            },
+            "box": {
+              "type": "boolean"
+            },
+            "locationName": {
+              "type": "string"
+            },
+            "timestampFormat": {
+              "type": "string"
+            },
+            "xmlOrder": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "properties": {
+            "input": {
+              "required": [
+                "shape"
+              ],
+              "properties": {
+                "documentation": {
+                  "type": "string"
+                },
+                "shape": {
+                  "type": "string"
+                },
+                "locationName": {
+                  "type": "string"
+                },
+                "xmlNamespace": {
+                  "required": [
+                    "uri"
+                  ],
+                  "properties": {
+                    "uri": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "output": {
+              "required": [
+                "shape"
+              ],
+              "properties": {
+                "documentation": {
+                  "type": "string"
+                },
+                "shape": {
+                  "type": "string"
+                },
+                "resultWrapper": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": {
+              "type": "string"
+            },
+            "documentation": {
+              "type": "string"
+            },
+            "http": {
+              "required": [
+                "method",
+                "requestUri"
+              ],
+              "properties": {
+                "requestUri": {
+                  "type": "string"
+                },
+                "method": {
+                  "type": "string"
+                },
+                "responseCode": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "errors": {
+              "items": {
+                "required": [
+                  "shape"
+                ],
+                "properties": {
+                  "exception": {
+                    "type": "boolean"
+                  },
+                  "fault": {
+                    "type": "boolean"
+                  },
+                  "documentation": {
+                    "type": "string"
+                  },
+                  "shape": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "required": [
+                      "httpStatusCode"
+                    ],
+                    "properties": {
+                      "httpStatusCode": {
+                        "type": "integer"
+                      },
+                      "senderFault": {
+                        "type": "boolean"
+                      },
+                      "code": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "documentationUrl": {
+              "type": "string"
+            },
+            "deprecated": {
+              "type": "boolean"
+            },
+            "idempotent": {
+              "type": "boolean"
+            },
+            "authtype": {
+              "type": "string"
+            },
+            "alias": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    "metadata": {
+      "required": [
+        "apiVersion",
+        "endpointPrefix",
+        "protocol",
+        "serviceFullName",
+        "signatureVersion"
+      ],
+      "properties": {
+        "serviceAbbreviation": {
+          "type": "string"
+        },
+        "globalEndpoint": {
+          "type": "string"
+        },
+        "jsonVersion": {
+          "type": "string"
+        },
+        "serviceFullName": {
+          "type": "string"
+        },
+        "signingName": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "endpointPrefix": {
+          "type": "string"
+        },
+        "timestampFormat": {
+          "type": "string"
+        },
+        "xmlNamespace": {
+          "type": "string"
+        },
+        "targetPrefix": {
+          "type": "string"
+        },
+        "checksumFormat": {
+          "type": "string"
+        },
+        "signatureVersion": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "examples": {
+      "properties": {},
+      "type": "object"
+    },
+    "version": {
+      "type": "string"
+    },
+    "documentation": {
+      "type": "string"
+    }
+  },
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-04/schema#"
+}
