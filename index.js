@@ -16,8 +16,8 @@ function clean(s){
 
 function validate(src){
 	var result = true;
-	var validProtocols = ['json','rest-json','rest-xml','query']; //TODO ec2
-	if (src.version != '2.0') result = false;
+	var validProtocols = ['json','rest-json','rest-xml','query','ec2'];
+	if ((typeof src.version !== 'undefined') && (src.version != '2.0')) result = false; // seems to be ok if missing
 	if (validProtocols.indexOf(src.metadata.protocol)<0) result = false;
 	return result;
 }
@@ -62,7 +62,7 @@ function findResponsesForShape(openapi,shape,shapeName){
 				var ok = false;
 				for (var r in action.responses) {
 					r = parseInt(r,10);
-					if ((r>=200) && (r<300)) { // TODO
+					if ((r>=200) && (r<700)) { // TODO
 						var ref = (r.schema ? r.schema["$ref"] : '');
 						if (ref == '#/definitions/'+shapeName) ok = true;
 					}
@@ -145,7 +145,7 @@ function transformShape(openapi,shape){
 		shape.format = 'float';
 	}
 	if (shape.type == 'long') {
-		shape.type = 'integer'; // TODO verify this, it may simply be an unbounded integer
+		shape.type = 'integer'; // TODO verify this, is it simply an unbounded integer
 	}
 	rename(shape,'members','properties');
 	if (shape.documentation) {
@@ -262,7 +262,6 @@ function transformShape(openapi,shape){
 			}
 
 			// we now need to know which operation (or response?) is referencing this shape
-			//var input = false; // TODO
 			var shapeName = state.keys[state.keys.length-1];
 			attachHeader(openapi,shape,shapeName,newHeader,index>=0);
 
@@ -310,6 +309,9 @@ function transformShape(openapi,shape){
 		}
 		if (state.key == 'idempotencyToken') {
 			delete state.parents[state.parents.length-1].idempotencyToken; // TODO
+		}
+		if (state.key == 'queryName') {
+			delete state.parents[state.parents.length-1].queryName; // TODO ec2 only
 		}
 		if (state.key == 'streaming') {
 			delete state.parents[state.parents.length-1].streaming; // TODO revisit this for OpenApi 3.x ?
@@ -364,6 +366,16 @@ module.exports = {
 			s.schemes = [];
 			s.consumes = [];
 			s.produces = [];
+
+			s.securityDefinitions = {};
+			s.securityDefinitions.hmac = {};
+			s.securityDefinitions.hmac.type = 'apiKey';
+			s.securityDefinitions.hmac.name = 'Authorization';
+			s.securityDefinitions.hmac["in"] = 'header';
+			s.security = [];
+			var sec = {};
+			sec.hmac = [];
+			s.security.push(sec);
 
 			var protocol = src.metadata.protocol;
 
@@ -441,6 +453,10 @@ module.exports = {
 				var url = op.http.requestUri;
 				while (url.indexOf('+}')>=0) {
 					url = url.replace('+}','}'); // TODO we need to mark the parameter (later) as multiple, IF swagger 2.0 supports this
+				}
+
+				if (protocol == 'ec2') {
+					url += '#'+p; // ec2 hack
 				}
 
 				s.paths[url] = path; //TODO check we're not overwriting
