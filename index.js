@@ -310,8 +310,11 @@ module.exports = {
 						s.schemes.push('http');
 					}
 					var actionName = op.http.method.toLocaleLowerCase();
-					action.operationId = p;
+					action.operationId = p; // TODO not handled is 'alias', add as a vendor extension if necessary
 					action.description = clean(op.documentation);
+					if (op.documentationUrl) {
+						action.description += '<p>'+op.documentationUrl+'</p>';
+					}
 					action.responses = {};
 					var success = {};
 					success.description = 'Success';
