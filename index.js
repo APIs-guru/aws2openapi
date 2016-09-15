@@ -1,6 +1,11 @@
 var _ = require('lodash');
 var recurseotron = require('../openapi_optimise/common.js');
 
+/*
+https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
+https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-swagger-extensions.html
+*/
+
 function clean(s){
 	var org = s;
 	if (s.startsWith('<p>')) s = s.substr(3);
@@ -24,18 +29,48 @@ function rename(obj,key,newKey){
 	}
 }
 
-function findActionsForShape(openapi,shape){
+function findActionsForShape(openapi,shape,shapeName){
 	var result = [];
-	// TODO currently returns first action, may need to return an array
 	for (var p in openapi.paths) {
 		var path = openapi.paths[p];
 		for (var a in recurseotron.actions){
-			if (path[recurseotron.actions[a]]) {
-				result.push(path[recurseotron.actions[a]]);
+			var action = path[recurseotron.actions[a]];
+			if (action) {
+				var ok = false;
+				for (var p in action.parameters) {
+					// TODO not all the parameters may be there yet
+					var param = action.parameters[p];
+					if (p["in"] == 'body') {
+						var ref = p.schema["$ref"];
+						if (ref == '#/definitions/'+shapeName) ok = true;
+					}
+				}
+				if (ok) result.push(action);
 			}
 		}
 	}
 	return result;
+}
+
+function findResponsesForShape(openapi,shape,shapeName){
+	var result = [];
+	for (var p in openapi.paths) {
+		var path = openapi.paths[p];
+		for (var a in recurseotron.actions){
+			var action = path[recurseotron.actions[a]];
+			if (action) {
+				var ok = false;
+				for (var r in action.responses) {
+					r = parseInt(r,10);
+					if ((r>=200) && (r<300)) { // TODO
+						var ref = (r.schema ? r.schema["$ref"] : '');
+						if (ref == '#/definitions/'+shapeName) ok = true;
+					}
+				}
+				if (ok) result.push(r);
+			}
+		}
+	}
 }
 
 function findActionsForParameter(openapi,parameter){
@@ -53,24 +88,31 @@ function findActionsForParameter(openapi,parameter){
 	return result;
 }
 
-function attachHeader(openapi,shape,header,required){
-	var actions = findActionsForShape(openapi,shape);
-	if (actions.length>0) {
-		for (var a in actions) {
-			var action = actions[a];
-			if (!action.parameters) {
-				action.parameters = [];
-			}
-			var param = {};
-			param.name = header.locationName;
-			param["in"] = 'header';
-			param.type = 'string';
-			if (required) param.required = true;
-			//var parameters = [];
-			//parameters.push(param);
-			//action.parameters = _.unionWith(action.parameters,parameters,_.isEqual);
-			action.parameters.push(param); // we uniq them later
+function attachHeader(openapi,shape,shapeName,header,required){
+	var actions = findActionsForShape(openapi,shape,shapeName);
+	for (var a in actions) {
+		var action = actions[a];
+		if (!action.parameters) {
+			action.parameters = [];
 		}
+		var param = {};
+		param.name = header.locationName;
+		param["in"] = 'header';
+		param.type = 'string';
+		if (required) param.required = true;
+		action.parameters.push(param); // we uniq them later
+	}
+	var responses = findResponsesForShape(openapi,shape,shapeName);
+	for (var r in responses) {
+		var response = responses[r];
+		if (!response.header) {
+			response.headers = {};
+		}
+		var header = {};
+		//header.name = header.locationName;
+		header.description = '';
+		param.type = 'string'; // TODO
+		response.headers[header.locationName] = header;
 	}
 }
 
@@ -220,7 +262,9 @@ function transformShape(openapi,shape){
 			}
 
 			// we now need to know which operation (or response?) is referencing this shape
-			attachHeader(openapi,shape,newHeader,index>=0);
+			//var input = false; // TODO
+			var shapeName = state.keys[state.keys.length-1];
+			attachHeader(openapi,shape,shapeName,newHeader,index>=0);
 
 			delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
 		}
