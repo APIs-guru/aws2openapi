@@ -11,15 +11,17 @@ function clean(s){
 
 function validate(src){
 	var result = true;
-	var validProtocols = ['json','rest-json','rest-xml']; //TODO query, ec2
+	var validProtocols = ['json','rest-json','rest-xml','query']; //TODO ec2
 	if (src.version != '2.0') result = false;
 	if (validProtocols.indexOf(src.metadata.protocol)<0) result = false;
 	return result;
 }
 
 function rename(obj,key,newKey){
-	obj[newKey] = obj[key];
-	delete obj[key];
+	if (typeof obj[key] !== 'undefined') {
+		obj[newKey] = obj[key];
+		delete obj[key];
+	}
 }
 
 function findActionsForShape(openapi,shape){
@@ -96,9 +98,12 @@ function attachParameter(openapi,shape,parameter,required,location){
 function transformShape(openapi,shape){
 
 	if (shape.type == 'structure') shape.type = 'object';
-	if (shape.type == 'long') {
+	if (shape.type == 'float') {
 		shape.type = 'number';
 		shape.format = 'float';
+	}
+	if (shape.type == 'long') {
+		shape.type = 'integer'; // TODO verify this, it may simply be an unbounded integer
 	}
 	rename(shape,'members','properties');
 	if (shape.documentation) {
@@ -121,15 +126,19 @@ function transformShape(openapi,shape){
 			shape.format = 'password';
 			delete shape.sensitive;
 		}
+		if (shape.pattern) {
+			try {
+				var regex = new RegExp(shape.pattern);
+			}
+			catch (e) {
+				rename(shape,'pattern','x-pattern');
+			}
+		}
 	}
 
 	if (shape.type == 'integer') {
-		if (typeof shape.min !== 'undefined') {
-			rename(shape,'min','minimum');
-		}
-		if (typeof shape.max !== 'undefined') {
-			rename(shape,'max','maximum');
-		}
+		rename(shape,'min','minimum');
+		rename(shape,'max','maximum');
 	}
 
 	if (shape.type == 'timestamp') {
@@ -141,6 +150,8 @@ function transformShape(openapi,shape){
 	if (shape.type == 'list') {
 		shape.type = 'array';
 		rename(shape,'member','items');
+		rename(shape,'min','minItems');
+		rename(shape,'max','maxItems');
 	}
 
 	if (shape.type == 'map') {
@@ -164,6 +175,11 @@ function transformShape(openapi,shape){
 		shape.format = 'double';
 	}
 
+	if (shape.type == 'number') {
+		rename(shape,'min','minimum');
+		rename(shape,'max','maximum');
+	}
+
 	if (shape.flattened) {
 		if (!shape.xml) shape.xml = {};
 		shape.xml.wrapped = (!shape.flattened);
@@ -173,6 +189,9 @@ function transformShape(openapi,shape){
 	delete shape.exception;
 	delete shape.fault;
 	delete shape.error;
+	delete shape.sensitive;
+	delete shape.wrapper; // xml
+	delete shape.xmlOrder; // xml
 
 	recurseotron.recurse(shape,{},function(obj,state){
 		if (state.key == 'shape') {
@@ -185,6 +204,9 @@ function transformShape(openapi,shape){
 		}
 		if ((state.key == 'location') && (obj == 'headers')) {
 			delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]]; // TODO
+		}
+		if ((state.key == 'location') && (obj == 'statusCode')) {
+			delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]]; // should already be pointed to by 'output'
 		}
 		if ((state.key == 'location') && (obj == 'header')) {
 			var header = state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
@@ -228,11 +250,22 @@ function transformShape(openapi,shape){
 			shape.xml.attribute = obj;
 			delete state.parents[state.parents.length-1].xmlAttribute;
 		}
+		if (state.key == 'flattened') {
+			if (!shape.xml) shape.xml = {};
+			shape.xml.wrapped = !obj;
+			delete state.parents[state.parents.length-1].flattened;
+		}
 		if (state.key == 'locationName') {
 			delete state.parents[state.parents.length-1].locationName;
 		}
 		if (state.key == 'payload') {
 			delete state.parents[state.parents.length-1].payload; // TODO
+		}
+		if (state.key == 'box') {
+			delete state.parents[state.parents.length-1].box; // TODO
+		}
+		if (state.key == 'idempotencyToken') {
+			delete state.parents[state.parents.length-1].idempotencyToken; // TODO
 		}
 		if (state.key == 'streaming') {
 			delete state.parents[state.parents.length-1].streaming; // TODO revisit this for OpenApi 3.x ?
@@ -288,11 +321,20 @@ module.exports = {
 			s.consumes = [];
 			s.produces = [];
 
-			if ((src.metadata.protocol == 'rest-json') || (src.metadata.protocol == 'json')) {
+			var protocol = src.metadata.protocol;
+
+			if ((protocol == 'query') && (src.metadata.xmlNamespace)) {
+				protocol = 'xml';
+			}
+			if ((protocol == 'query') && (src.metadata.jsonVersion)) {
+				protocol = 'json';
+			}
+
+			if ((protocol == 'rest-json') || (protocol == 'json')) {
 				s.consumes.push('application/json');
 				s.produces.push('application/json');
 			}
-			if (src.metadata.protocol == 'rest-xml') {
+			if (protocol == 'rest-xml') {
 				s.consumes.push('text/xml');
 				s.produces.push('text/xml');
 			}
@@ -311,7 +353,7 @@ module.exports = {
 					}
 					var actionName = op.http.method.toLocaleLowerCase();
 					action.operationId = p; // TODO not handled is 'alias', add as a vendor extension if necessary
-					action.description = clean(op.documentation);
+					action.description = (op.documentation ? clean(op.documentation) : '');
 					if (op.documentationUrl) {
 						action.description += '<p>'+op.documentationUrl+'</p>';
 					}

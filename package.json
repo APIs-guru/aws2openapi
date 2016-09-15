@@ -16,5 +16,12 @@
     "api"
   ],
   "author": "Mike Ralphson <mike.ralphson@gmail.com>",
-  "license": "BSD-3-Clause"
+  "license": "MIT",
+  "dependencies": {
+   "openapi_optimise": "latest",
+   "yargs": "latest",
+  }
+  "devDependencies": {
+   "swagger-parser": "latest"
+  }
 }
