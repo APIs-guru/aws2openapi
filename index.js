@@ -11,7 +11,7 @@ function clean(s){
 
 function validate(src){
 	var result = true;
-	var validProtocols = ['json','rest-json'];
+	var validProtocols = ['json','rest-json','rest-xml']; //TODO query, ec2
 	if (src.version != '2.0') result = false;
 	if (validProtocols.indexOf(src.metadata.protocol)<0) result = false;
 	return result;
@@ -22,31 +22,74 @@ function rename(obj,key,newKey){
 	delete obj[key];
 }
 
-function findActionForShape(openapi,shape){
-	// TODO currently returns first action
+function findActionsForShape(openapi,shape){
+	var result = [];
+	// TODO currently returns first action, may need to return an array
 	for (var p in openapi.paths) {
 		var path = openapi.paths[p];
 		for (var a in recurseotron.actions){
 			if (path[recurseotron.actions[a]]) {
-				return path[recurseotron.actions[a]];
+				result.push(path[recurseotron.actions[a]]);
 			}
 		}
 	}
-	return false;
+	return result;
+}
+
+function findActionsForParameter(openapi,parameter){
+	var result = [];
+	for (var p in openapi.paths) {
+		var path = openapi.paths[p];
+		if (p.indexOf('{'+parameter.locationName+'}')>=0) {
+			for (var a in recurseotron.actions) {
+				if (path[recurseotron.actions[a]]) {
+					result.push(path[recurseotron.actions[a]]);
+				}
+			}
+		}
+	}
+	return result;
 }
 
 function attachHeader(openapi,shape,header,required){
-	var action = findActionForShape(openapi,shape);
-	if (action) {
-		if (!action.parameters) {
-			action.parameters = [];
+	var actions = findActionsForShape(openapi,shape);
+	if (actions.length>0) {
+		for (var a in actions) {
+			var action = actions[a];
+			if (!action.parameters) {
+				action.parameters = [];
+			}
+			var param = {};
+			param.name = header.locationName;
+			param["in"] = 'header';
+			param.type = 'string';
+			if (required) param.required = true;
+			//var parameters = [];
+			//parameters.push(param);
+			//action.parameters = _.unionWith(action.parameters,parameters,_.isEqual);
+			action.parameters.push(param); // we uniq them later
 		}
-		var param = {};
-		param.name = header.locationName;
-		param["in"] = 'header';
-		param.type = 'string';
-		if (required) param.required = true;
-		action.parameters.push(param);
+	}
+}
+
+function attachParameter(openapi,shape,parameter,required,location){
+	var actions = findActionsForParameter(openapi,parameter);
+	if (actions.length>0) {
+		for (var a in actions) {
+			var action = actions[a];
+			if (!action.parameters) {
+				action.parameters = [];
+			}
+			var param = {};
+			param.name = parameter.locationName;
+			param["in"] = (location == 'querystring' ? 'query' : 'path');
+			param.type = 'string'; // TODO de-reference shape we might not have transformed, but string is a good default
+			if (required) param.required = true;
+			//var parameters = [];
+			//parameters.push(param);
+			//action.parameters = _.unionWith(action.parameters,parameters,_.isEqual);
+			action.parameters.push(param); // we uniq them later
+		}
 	}
 }
 
@@ -63,12 +106,20 @@ function transformShape(openapi,shape){
 		delete shape.documentation;
 	}
 
+	if (shape.type == 'blob') {
+		shape.type = 'string';
+	}
+
 	if (shape.type == 'string') {
 		if (typeof shape.min !== 'undefined') {
 			rename(shape,'min','minLength');
 		}
 		if (typeof shape.max !== 'undefined') {
 			rename(shape,'max','maxLength');
+		}
+		if (shape.sensitive) {
+			shape.format = 'password';
+			delete shape.sensitive;
 		}
 	}
 
@@ -82,8 +133,9 @@ function transformShape(openapi,shape){
 	}
 
 	if (shape.type == 'timestamp') {
-		shape.type = 'string'; // TODO validate this
-		shape.format = 'date-time';
+		shape.type = 'string';
+		delete shape.timestampFormat;
+		shape.format = 'date-time'; // TODO validate this, add a pattern for rfc822 etc
 	}
 
 	if (shape.type == 'list') {
@@ -112,6 +164,12 @@ function transformShape(openapi,shape){
 		shape.format = 'double';
 	}
 
+	if (shape.flattened) {
+		if (!shape.xml) shape.xml = {};
+		shape.xml.wrapped = (!shape.flattened);
+		delete shape.flattened;
+	}
+
 	delete shape.exception;
 	delete shape.fault;
 	delete shape.error;
@@ -125,6 +183,9 @@ function transformShape(openapi,shape){
 			state.parents[state.parents.length-1].description = clean(obj);
 			delete state.parents[state.parents.length-1].documentation;
 		}
+		if ((state.key == 'location') && (obj == 'headers')) {
+			delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]]; // TODO
+		}
 		if ((state.key == 'location') && (obj == 'header')) {
 			var header = state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
 			var newHeader = _.cloneDeep(header);
@@ -133,6 +194,7 @@ function transformShape(openapi,shape){
 			var index = (required ? required.indexOf(state.keys[state.keys.length-2]) : -1);
 			if (index>=0) {
 				required.splice(index,1);
+				if (required.length<=0) delete shape.required;
 			}
 
 			// we now need to know which operation (or response?) is referencing this shape
@@ -140,9 +202,55 @@ function transformShape(openapi,shape){
 
 			delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
 		}
+		if ((state.key == 'location') && ((obj == 'uri') || (obj == 'querystring'))) {
+			var param = state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
+			var newParam = _.cloneDeep(param);
+
+			var required = shape.required;
+			var index = (required ? required.indexOf(state.keys[state.keys.length-2]) : -1);
+			if (index>=0) { // should always be true
+				required.splice(index,1);
+				if (required.length<=0) delete shape.required;
+			}
+
+			// we now need to know which operation (or response?) is referencing this shape
+			attachParameter(openapi,shape,newParam,index>=0,param.location);
+
+			delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
+		}
+		if (state.key == 'xmlNamespace') {
+			if (!shape.xml) shape.xml = {};
+			shape.xml.namespace = obj.uri;
+			delete state.parents[state.parents.length-1].xmlNamespace;
+		}
+		if (state.key == 'xmlAttribute') {
+			if (!shape.xml) shape.xml = {};
+			shape.xml.attribute = obj;
+			delete state.parents[state.parents.length-1].xmlAttribute;
+		}
+		if (state.key == 'locationName') {
+			delete state.parents[state.parents.length-1].locationName;
+		}
+		if (state.key == 'payload') {
+			delete state.parents[state.parents.length-1].payload; // TODO
+		}
+		if (state.key == 'streaming') {
+			delete state.parents[state.parents.length-1].streaming; // TODO revisit this for OpenApi 3.x ?
+		}
+		if (state.key == 'deprecated') {
+			delete state.parents[state.parents.length-1].deprecated; // TODO revisit this for OpenApi 3.x ?
+		}
 	});
 
 	return shape;
+}
+
+function postProcess(openapi){
+	recurseotron.forEachAction(openapi,function(action){
+		if (action.parameters) {
+			action.parameters = _.uniqWith(action.parameters,_.isEqual);
+		}
+	});
 }
 
 module.exports = {
@@ -159,7 +267,7 @@ module.exports = {
 			s.info.version = src.metadata.apiVersion
 			s.info["x-release"] = src.metadata.signatureVersion;
 			s.info.title = src.metadata.serviceFullName;
-			s.info.description = clean(src.documentation);
+			if (src.documentation) s.info.description = clean(src.documentation);
 			s["x-logo"] = {};
 			s["x-logo"].url = 'https://media.amazonwebservices.com/blog/2007/big_pbaws_logo_300px.jpg';
 			s["x-logo"].backgroundColor = '#FFFFFF';
@@ -179,10 +287,16 @@ module.exports = {
 			s.schemes = [];
 			s.consumes = [];
 			s.produces = [];
+
 			if ((src.metadata.protocol == 'rest-json') || (src.metadata.protocol == 'json')) {
 				s.consumes.push('application/json');
 				s.produces.push('application/json');
 			}
+			if (src.metadata.protocol == 'rest-xml') {
+				s.consumes.push('text/xml');
+				s.produces.push('text/xml');
+			}
+
 			s.paths = {};
 			s.definitions = {};
 
@@ -202,7 +316,7 @@ module.exports = {
 					var success = {};
 					success.description = 'Success';
 					success.schema = {};
-					if (op.output.shape) {
+					if (op.output && op.output.shape) {
 						success.schema["$ref"] = '#/definitions/'+op.output.shape;
 					}
 					action.responses[op.http.responsCode ? op.http.responseCode : 200] = success;
@@ -235,7 +349,12 @@ module.exports = {
 
 				path[actionName] = action;
 
-				s.paths[op.http.requestUri] = path; //!
+				var url = op.http.requestUri;
+				while (url.indexOf('+}')>=0) {
+					url = url.replace('+}','}'); // TODO we need to mark the parameter (later) as multiple, IF swagger 2.0 supports this
+				}
+
+				s.paths[url] = path; //TODO check we're not overwriting
 			}
 
 			for (var d in src.shapes) {
@@ -245,6 +364,8 @@ module.exports = {
 
 				s.definitions[d] = shape;
 			}
+
+			postProcess(s);
 
 			callback(err,s);
 
