@@ -1,7 +1,7 @@
 var fs = require('fs');
 var path = require('path');
 var SwaggerParser = require('swagger-parser');
-//var validator = require('is-my-json-valid')
+var validator = require('is-my-json-valid')
 var aws2oa = require('./index.js');
 
 var swaggerSchema = require('./validation/swagger2Schema.json');
@@ -17,16 +17,17 @@ var result = aws2oa.convert(aws,{},function(err,openapi){
 	}
 	if (openapi) {
 
-		//var validate = validator(swaggerSchema);
-		//validate(openapi,{
-		//	greedy: true,
-		//	verbose: true
-		//});
-		//var errors = validate.errors;
-		//if (errors) {
-		//	console.log('Failed validation: %s',input);
-		//	console.log(errors);
-		//}
+		var validate = validator(swaggerSchema);
+		validate(openapi,{
+			greedy: true,
+			verbose: true
+		});
+		var errors = validate.errors;
+		if (errors) {
+			console.log(input);
+			console.log('Failed validation (simple): %s',input);
+			console.log(errors);
+		}
 
 		SwaggerParser.validate(openapi, function(err, api) {
 		  if (err) {
