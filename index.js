@@ -236,12 +236,12 @@ function transformShape(openapi,shape){
 
 	recurseotron.recurse(shape,{},function(obj,state){
 		if (state.key == 'shape') {
-			state.parents[state.parents.length-1]["$ref"] = '#/definitions/'+obj;
-			delete state.parents[state.parents.length-1][state.key];
+			state.parent["$ref"] = '#/definitions/'+obj;
+			delete state.parent[state.key];
 		}
 		if (state.key == 'documentation') {
-			state.parents[state.parents.length-1].description = clean(obj);
-			delete state.parents[state.parents.length-1].documentation;
+			state.parent.description = clean(obj);
+			delete state.parent.documentation;
 		}
 		if ((state.key == 'location') && (obj == 'headers')) {
 			delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]]; // TODO
@@ -285,38 +285,38 @@ function transformShape(openapi,shape){
 		if (state.key == 'xmlNamespace') {
 			if (!shape.xml) shape.xml = {};
 			shape.xml.namespace = obj.uri;
-			delete state.parents[state.parents.length-1].xmlNamespace;
+			delete state.parent.xmlNamespace;
 		}
 		if (state.key == 'xmlAttribute') {
 			if (!shape.xml) shape.xml = {};
 			shape.xml.attribute = obj;
-			delete state.parents[state.parents.length-1].xmlAttribute;
+			delete state.parent.xmlAttribute;
 		}
 		if (state.key == 'flattened') {
 			if (!shape.xml) shape.xml = {};
 			shape.xml.wrapped = !obj;
-			delete state.parents[state.parents.length-1].flattened;
+			delete state.parent.flattened;
 		}
 		if (state.key == 'locationName') {
-			delete state.parents[state.parents.length-1].locationName;
+			delete state.parent.locationName;
 		}
 		if (state.key == 'payload') {
-			delete state.parents[state.parents.length-1].payload; // TODO
+			delete state.parent.payload; // TODO
 		}
 		if (state.key == 'box') {
-			delete state.parents[state.parents.length-1].box; // TODO
+			delete state.parent.box; // just indicates if this is model around a simple type
 		}
 		if (state.key == 'idempotencyToken') {
-			delete state.parents[state.parents.length-1].idempotencyToken; // TODO
+			delete state.parent.idempotencyToken; // TODO
 		}
 		if (state.key == 'queryName') {
-			delete state.parents[state.parents.length-1].queryName; // TODO ec2 only
+			delete state.parent.queryName; // TODO ec2 only
 		}
 		if (state.key == 'streaming') {
-			delete state.parents[state.parents.length-1].streaming; // TODO revisit this for OpenApi 3.x ?
+			delete state.parent.streaming; // TODO revisit this for OpenApi 3.x ?
 		}
 		if (state.key == 'deprecated') {
-			delete state.parents[state.parents.length-1].deprecated; // TODO revisit this for OpenApi 3.x ?
+			delete state.parent.deprecated; // TODO revisit this for OpenApi 3.x ?
 		}
 	});
 
@@ -436,7 +436,7 @@ module.exports = {
 					action.parameters.push(param);
 				}
 
-				var defStatus = 400;
+				var defStatus = 480;
 				for (var e in op.errors) {
 					var error = op.errors[e];
 					var failure = {};
@@ -444,7 +444,7 @@ module.exports = {
 					failure["x-aws-exception"] = error.exception;
 					failure.schema = {};
 					failure.schema["$ref"] = '#/definitions/'+error.shape;
-					action.responses[error.error ? error.error.httpStatusCode : defStatus++] = failure; //TODO fake statuses. Map to combined output schema?
+					action.responses[error.error ? error.error.httpStatusCode : defStatus++] = failure; //TODO fake statuses created. Map to combined output schema with a 'oneOf'?
 				}
 
 				path[actionName] = action;
