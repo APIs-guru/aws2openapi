@@ -9,6 +9,7 @@ var swaggerSchema = require('./validation/swagger2Schema.json');
 var input = (process.argv.length>2 ? process.argv[2] : './aws-sdk-js/apis/mobileanalytics-2014-06-05.normal.json');
 var outputDir = (process.argv.length>3 ? process.argv[3] : './aws/');
 
+console.log(input);
 var aws = require(path.resolve(input));
 
 var result = aws2oa.convert(aws,{},function(err,openapi){
@@ -41,6 +42,9 @@ var result = aws2oa.convert(aws,{},function(err,openapi){
 		filename = filename.replace('.normal.json','');
 		components = filename.split('-');
 		var prefix = components[0];
+		if (!components[1].startsWith('2')) {
+			prefix += '-' + components[1];
+		}
 		var version = filename.replace(prefix+'-','');
 		try {
 			fs.mkdirSync(outputDir+prefix);

@@ -62,7 +62,7 @@ function findResponsesForShape(openapi,shape,shapeName){
 				var ok = false;
 				for (var r in action.responses) {
 					r = parseInt(r,10);
-					if ((r>=200) && (r<700)) { // TODO
+					if ((r>=200) && (r<700)) {
 						var ref = (r.schema ? r.schema["$ref"] : '');
 						if (ref == '#/definitions/'+shapeName) ok = true;
 					}
@@ -109,9 +109,8 @@ function attachHeader(openapi,shape,shapeName,header,required){
 			response.headers = {};
 		}
 		var header = {};
-		//header.name = header.locationName;
 		header.description = '';
-		param.type = 'string'; // TODO
+		param.type = 'string'; // TODO but string is a good default
 		response.headers[header.locationName] = header;
 	}
 }
@@ -145,7 +144,7 @@ function transformShape(openapi,shape){
 		shape.format = 'float';
 	}
 	if (shape.type == 'long') {
-		shape.type = 'integer'; // TODO verify this, is it simply an unbounded integer
+		shape.type = 'integer'; // TODO verify this, is it simply an unbounded integer?
 	}
 	rename(shape,'members','properties');
 	if (shape.documentation) {
@@ -416,11 +415,11 @@ module.exports = {
 					action.responses = {};
 					var success = {};
 					success.description = 'Success';
-					success.schema = {};
 					if (op.output && op.output.shape) {
+						success.schema = {};
 						success.schema["$ref"] = '#/definitions/'+op.output.shape;
 					}
-					action.responses[op.http.responsCode ? op.http.responseCode : 200] = success;
+					action.responses[op.http.responseCode ? op.http.responseCode : 200] = success;
 				}
 
 				if (op.input && op.input.shape) {
@@ -459,7 +458,12 @@ module.exports = {
 					url += '#'+p; // ec2 hack
 				}
 
-				s.paths[url] = path; //TODO check we're not overwriting
+				if (s.paths[url]) {
+					s.paths[url][actionName] = action;
+				}
+				else {
+					s.paths[url] = path;
+				}
 			}
 
 			for (var d in src.shapes) {
