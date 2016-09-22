@@ -6,6 +6,13 @@ https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
 https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-swagger-extensions.html
 */
 
+var multiParams = [];
+
+/**
+Removes starting and ending <p></p> markup if no other <p>'s exist
+@param s {string} the string to clean
+@returns the cleaned or original string
+*/
 function clean(s){
 	var org = s;
 	if (s.startsWith('<p>')) s = s.substr(3);
@@ -14,6 +21,11 @@ function clean(s){
 	return s;
 }
 
+/**
+Checks the source spec is in a format version and protocol we expect to see
+@param src {aws-spec} the specification to check
+@returns boolean
+*/
 function validate(src){
 	var result = true;
 	var validProtocols = ['json','rest-json','rest-xml','query','ec2'];
@@ -22,6 +34,12 @@ function validate(src){
 	return result;
 }
 
+/**
+rename an object property by removing and re-adding it
+@param obj {object} the object to mutate
+@param key {string} the property name to rename
+@param newKey {string} the new property name
+*/
 function rename(obj,key,newKey){
 	if (typeof obj[key] !== 'undefined') {
 		obj[newKey] = obj[key];
@@ -29,7 +47,7 @@ function rename(obj,key,newKey){
 	}
 }
 
-function findActionsForShape(openapi,shape,shapeName){
+function findLocationsForShape(openapi,shape,shapeName){
 	var result = [];
 	for (var p in openapi.paths) {
 		var path = openapi.paths[p];
@@ -45,7 +63,12 @@ function findActionsForShape(openapi,shape,shapeName){
 						if (ref == '#/definitions/'+shapeName) ok = true;
 					}
 				}
-				if (ok) result.push(action);
+				if (ok) {
+					var location = {};
+					location.url = p;
+					location.action = action;
+					result.push(location);
+				}
 			}
 		}
 	}
@@ -73,14 +96,18 @@ function findResponsesForShape(openapi,shape,shapeName){
 	}
 }
 
-function findActionsForParameter(openapi,parameter){
+function findLocationsForParameter(openapi,parameter){
 	var result = [];
 	for (var p in openapi.paths) {
 		var path = openapi.paths[p];
 		if (p.indexOf('{'+parameter.locationName+'}')>=0) {
 			for (var a in recurseotron.actions) {
 				if (path[recurseotron.actions[a]]) {
-					result.push(path[recurseotron.actions[a]]);
+					var location = {};
+					location.url = p;
+					location.verb = recurseotron.actions[a]
+					location.action = path[recurseotron.actions[a]];
+					result.push(location);
 				}
 			}
 		}
@@ -89,9 +116,9 @@ function findActionsForParameter(openapi,parameter){
 }
 
 function attachHeader(openapi,shape,shapeName,header,required){
-	var actions = findActionsForShape(openapi,shape,shapeName);
-	for (var a in actions) {
-		var action = actions[a];
+	var locations = findLocationsForShape(openapi,shape,shapeName);
+	for (var l in locations) {
+		var action = locations[l].action;
 		if (!action.parameters) {
 			action.parameters = [];
 		}
@@ -110,29 +137,38 @@ function attachHeader(openapi,shape,shapeName,header,required){
 		}
 		var header = {};
 		header.description = '';
-		param.type = 'string'; // TODO but string is a good default
+		param.type = 'string';
 		response.headers[header.locationName] = header;
 	}
 }
 
 function attachParameter(openapi,shape,parameter,required,location){
-	var actions = findActionsForParameter(openapi,parameter);
-	if (actions.length>0) {
-		for (var a in actions) {
-			var action = actions[a];
-			if (!action.parameters) {
-				action.parameters = [];
-			}
-			var param = {};
-			param.name = parameter.locationName;
-			param["in"] = (location == 'querystring' ? 'query' : 'path');
-			param.type = 'string'; // TODO de-reference shape we might not have transformed, but string is a good default
-			if (required) param.required = true;
-			//var parameters = [];
-			//parameters.push(param);
-			//action.parameters = _.unionWith(action.parameters,parameters,_.isEqual);
-			action.parameters.push(param); // we uniq them later
+	var locations = findLocationsForParameter(openapi,parameter);
+	for (var l in locations) {
+		var action = locations[l].action;
+		if (!action.parameters) {
+			action.parameters = [];
 		}
+		var param = {};
+		param.name = parameter.locationName;
+		param["in"] = (location == 'querystring' ? 'query' : 'path');
+		param.type = 'string'; // TODO de-reference shape we might not yet have transformed, but string is a good default
+		if (required) param.required = true;
+
+		if (param["in"] == 'path') {
+			for (var m in multiParams) {
+				var multiple = multiParams[m];
+				if ((param.type != 'array') && (multiple.url == locations[l].url) && (multiple.param == param.name) &&
+					(multiple.action == locations[l].verb)) {
+					param.items = {};
+					param.items.type = param.type; // TODO move format etc into the items structure if necessary. Only seen in s3
+					param.type = 'array';
+					param.collectionFormat = 'csv'; // TODO validate this
+				}
+			}
+		}
+
+		action.parameters.push(param); // we uniq them later
 	}
 }
 
@@ -359,18 +395,43 @@ module.exports = {
 			s.info.license.url = 'http://www.apache.org/licenses/';
 			s.externalDocs = {};
 			s.externalDocs.description = 'Amazon Web Services documentation';
-			s.externalDocs.url = 'https://aws.amazon.com/'+src.metadata.endpointPrefix+'/';
+			var epp = src.metadata.endpointPrefix.split('.');
+			s.externalDocs.url = 'https://aws.amazon.com/'+epp[epp.length-1]+'/';
 			s.host = src.metadata.endpointPrefix+'.us-east-1.amazonaws.com';
 			s.basePath = '/';
 			s.schemes = [];
 			s.consumes = [];
 			s.produces = [];
 
+			s.parameters = {};
+			s.parameters['X-Amz-Content-Sha256'] = {};
+			s.parameters['X-Amz-Content-Sha256'].name = 'X-Amz-Content-Sha256';
+			s.parameters['X-Amz-Content-Sha256']["in"] = 'header';
+			s.parameters['X-Amz-Content-Sha256'].type = 'string';
+			s.parameters['X-Amz-Content-Sha256'].required = true;
+
+			s.parameters['X-Amz-Date'] = {};
+			s.parameters['X-Amz-Date'].name = 'X-Amz-Date';
+			s.parameters['X-Amz-Date']["in"] = 'header';
+			s.parameters['X-Amz-Date'].type = 'string';
+			s.parameters['X-Amz-Date'].format = 'date-time';
+			s.parameters['X-Amz-Date'].required = true;
+
 			s.securityDefinitions = {};
 			s.securityDefinitions.hmac = {};
 			s.securityDefinitions.hmac.type = 'apiKey';
 			s.securityDefinitions.hmac.name = 'Authorization';
 			s.securityDefinitions.hmac["in"] = 'header';
+
+			var sigV4Headers = false;
+			if (src.metadata.signatureVersion) {
+				if (src.metadata.signatureVersion == 'v4') {
+					s.securityDefinitions.hmac.description = 'Amazon Signature authorization v4';
+					s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv4';
+					sigV4Headers = true;
+				}
+			}
+
 			s.security = [];
 			var sec = {};
 			sec.hmac = [];
@@ -450,8 +511,21 @@ module.exports = {
 				path[actionName] = action;
 
 				var url = op.http.requestUri;
-				while (url.indexOf('+}')>=0) {
-					url = url.replace('+}','}'); // TODO we need to mark the parameter (later) as multiple, IF swagger 2.0 supports this
+
+				url = url.replace(/(\{.+?\})/g,function(match,group1){ // store multiple parameters e.g. {key+} for later use. Only seen in s3
+					var result = group1.replace('+}','}');
+					if (result != group1) {
+						var multiple = {};
+						multiple.url = '';
+						multiple.action = actionName;
+						multiple.param = result.replace('{','').replace('}','');
+						multiParams.push(multiple);
+					}
+					return result;
+				});
+				for (var m in multiParams) {
+					var multiple = multiParams[m];
+					if (multiple.url == '') multiple.url = url;
 				}
 
 				if (protocol == 'ec2') {
@@ -463,6 +537,15 @@ module.exports = {
 				}
 				else {
 					s.paths[url] = path;
+					if (sigV4Headers) {
+						s.paths[url].parameters = [];
+						var param = {};
+						param["$ref"] = '#/parameters/X-Amz-Content-Sha256';
+						s.paths[url].parameters.push(param);
+						param = {};
+						param["$ref"] = '#/parameters/X-Amz-Date';
+						s.paths[url].parameters.push(param);
+					}
 				}
 			}
 
@@ -484,3 +567,4 @@ module.exports = {
 	}
 
 };
+

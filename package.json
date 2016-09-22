@@ -19,8 +19,8 @@
   "license": "MIT",
   "dependencies": {
    "openapi_optimise": "latest",
-   "yargs": "latest",
-  }
+   "yargs": "latest"
+  },
   "devDependencies": {
    "swagger-parser": "latest",
    "is-my-json-valid": "latest"
