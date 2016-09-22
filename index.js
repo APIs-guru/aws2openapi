@@ -472,6 +472,7 @@ module.exports = {
 				s.consumes.push('text/xml');
 				s.produces.push('text/xml');
 			}
+			var addFragment = (protocol == 'ec2');
 
 			s.paths = {};
 			s.definitions = {};
@@ -597,15 +598,23 @@ module.exports = {
 					if (multiple.url == '') multiple.url = url;
 				}
 
-				if (protocol == 'ec2') {
-					url += '#'+p; // ec2 hack
+				if (addFragment) {
+					url += '#'+p;
 				}
 
+				var attached = false;
 				if (s.paths[url]) {
-					s.paths[url][actionName] = action;
+					if (s.paths[url][actionName]) {
+						addFragment = true;
+						url += '#'+p;
+					}
+					else {
+						s.paths[url][actionName] = action;
+						attached = false;
+					}
 				}
-				else {
-					s.paths[url] = path; // contains action
+				if (!attached) {
+					s.paths[url] = path; // path contains action
 					if (sigV4Headers) {
 						s.paths[url].parameters = [];
 						for (var h in amzHeaders) {
