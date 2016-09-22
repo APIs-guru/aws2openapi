@@ -14,8 +14,27 @@ if (!outputDir.endsWith('/')) outputDir += '/';
 
 console.log(input);
 var aws = require(path.resolve(input));
+var options = {};
+try {
+	options.paginators = require(path.resolve(input.replace('.normal.','.paginators.')));
+	console.log('  Has paginators');
+}
+catch (ex) {}
+try {
+	options.examples = require(path.resolve(input.replace('.normal.','.examples.')));
+	console.log('  Has examples version '+options.examples.version);
+}
+catch (ex) {}
 
-var result = aws2oa.convert(aws,{},function(err,openapi){
+// https://docs.aws.amazon.com/aws-sdk-php/v2/guide/feature-waiters.html
+try {
+	options.waiters = require(path.resolve(input.replace('.normal.','.waiters2.')));
+	console.log('  Has waiters version '+options.waiters.version);
+}
+catch (ex) {}
+
+
+var result = aws2oa.convert(aws,options,function(err,openapi){
 	if ((err) && (Object.keys(err).length>0)) {
 		console.log(JSON.stringify(err));
 	}

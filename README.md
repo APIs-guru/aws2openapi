@@ -14,9 +14,11 @@ Resultant OpenApi specifications pass multiple validators
 * ~~Fix input header parameter selectivity~~
 * ~~Process ec2~~
 * ~~Authentication~~ You will have to calculate HMAC headers manually
-* Verify output header mappings 
+* ~~pagination~~
+* ~~Examples~~
+* ~~Waiters~~ (as vendor extension)
 * Test against live endpoints
+* Verify output header mappings 
 * Test ec2 path-with-fragment hack works
 * Test paths with hardcoded ?parameters work
 * Validate xml-handling keyword translations
-* Pagination?

@@ -6,6 +6,9 @@ https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
 https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-swagger-extensions.html
 */
 
+const amzHeaders = ['Action','Version','X-Amz-Content-Sha256','X-Amz-Date','X-Amz-Algorithm','X-Amz-Credential','X-Amz-Security-Token',
+	'X-Amz-Signature','X-Amz-SignedHeaders'];
+
 var multiParams = [];
 
 /**
@@ -359,11 +362,24 @@ function transformShape(openapi,shape){
 	return shape;
 }
 
-function postProcess(openapi){
+function postProcess(openapi,options){
 	recurseotron.forEachAction(openapi,function(action){
 		if (action.parameters) {
 			action.parameters = _.uniqWith(action.parameters,_.isEqual);
 		}
+
+		if (options.waiters) {
+			for (var w in options.waiters.waiters) {
+				var waiter = options.waiters.waiters[w];
+				if (waiter.operation == action.operationId) {
+					if (!action["x-waiters"]) {
+						action["x-waiters"] = [];
+					}
+					action["x-waiters"].push(waiter);
+				}
+			}
+		}
+
 	});
 }
 
@@ -404,18 +420,6 @@ module.exports = {
 			s.produces = [];
 
 			s.parameters = {};
-			s.parameters['X-Amz-Content-Sha256'] = {};
-			s.parameters['X-Amz-Content-Sha256'].name = 'X-Amz-Content-Sha256';
-			s.parameters['X-Amz-Content-Sha256']["in"] = 'header';
-			s.parameters['X-Amz-Content-Sha256'].type = 'string';
-			s.parameters['X-Amz-Content-Sha256'].required = true;
-
-			s.parameters['X-Amz-Date'] = {};
-			s.parameters['X-Amz-Date'].name = 'X-Amz-Date';
-			s.parameters['X-Amz-Date']["in"] = 'header';
-			s.parameters['X-Amz-Date'].type = 'string';
-			s.parameters['X-Amz-Date'].format = 'date-time';
-			s.parameters['X-Amz-Date'].required = true;
 
 			s.securityDefinitions = {};
 			s.securityDefinitions.hmac = {};
@@ -429,6 +433,20 @@ module.exports = {
 					s.securityDefinitions.hmac.description = 'Amazon Signature authorization v4';
 					s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv4';
 					sigV4Headers = true;
+
+					// https://docs.aws.amazon.com/IAM/latest/APIReference/CommonParameters.html
+
+					for (var h in amzHeaders) {
+						var header = {};
+						header.name = amzHeaders[h];
+						header["in"] = 'header';
+						header.type = 'string';
+						header.required = false;
+						s.parameters[amzHeaders[h]] = header;
+					}
+					s.parameters.Action.required = true;
+					s.parameters.Version.required = true;
+
 				}
 			}
 
@@ -479,12 +497,20 @@ module.exports = {
 					if (op.output && op.output.shape) {
 						success.schema = {};
 						success.schema["$ref"] = '#/definitions/'+op.output.shape;
+
+						if (options.examples && options.examples.examples[p]) {
+							for (var e in options.examples.examples[p]) {
+								var example = options.examples.examples[p][e];
+								if (example.output) {
+									src.shapes[op.output.shape].example = example.output;
+								}
+							}
+						}
 					}
 					action.responses[op.http.responseCode ? op.http.responseCode : 200] = success;
 				}
 
 				if (op.input && op.input.shape) {
-					action.parameters = [];
 					var param = {};
 					param.name = 'body';
 					param["in"] = 'body';
@@ -495,6 +521,49 @@ module.exports = {
 						action.parameters = [];
 					}
 					action.parameters.push(param);
+
+					if (options.examples && options.examples.examples[p]) {
+						for (var e in options.examples.examples[p]) {
+							var example = options.examples.examples[p][e];
+							if (example.input) {
+								src.shapes[op.input.shape].example = example.input;
+							}
+						}
+					}
+
+				}
+
+				if (options.paginators && options.paginators.pagination[p]) {
+					var pag = options.paginators.pagination[p];
+					if (pag.limit_key) {
+						var param = {};
+						param.name = pag.limit_key;
+						param.type = 'string';
+						param["in"] = 'query';
+						param.description = 'Pagination limit';
+						param.required = false;
+						if (!action.parameters) {
+							action.parameters = [];
+						}
+						action.parameters.push(param);
+					}
+					if (pag.input_token) {
+						if (!Array.isArray(pag.input_token)) {
+							pag.input_token = [pag.input_token]; //it usually isn't...
+						}
+						for (var t in pag.input_token) {
+							var param = {};
+							param.name = pag.input_token[t];
+							param.type = 'string';
+							param["in"] = 'query';
+							param.description = 'Pagination token';
+							param.required = false;
+							if (!action.parameters) {
+								action.parameters = [];
+							}
+							action.parameters.push(param);
+						}
+					}
 				}
 
 				var defStatus = 480;
@@ -536,15 +605,14 @@ module.exports = {
 					s.paths[url][actionName] = action;
 				}
 				else {
-					s.paths[url] = path;
+					s.paths[url] = path; // contains action
 					if (sigV4Headers) {
 						s.paths[url].parameters = [];
-						var param = {};
-						param["$ref"] = '#/parameters/X-Amz-Content-Sha256';
-						s.paths[url].parameters.push(param);
-						param = {};
-						param["$ref"] = '#/parameters/X-Amz-Date';
-						s.paths[url].parameters.push(param);
+						for (var h in amzHeaders) {
+							var param = {};
+							param["$ref"] = '#/parameters/'+amzHeaders[h];
+							s.paths[url].parameters.push(param);
+						}
 					}
 				}
 			}
@@ -557,7 +625,7 @@ module.exports = {
 				s.definitions[d] = shape;
 			}
 
-			postProcess(s);
+			postProcess(s,options);
 
 			callback(err,s);
 
