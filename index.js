@@ -8,6 +8,8 @@ https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-swagger
 
 const amzHeaders = ['Action','Version','X-Amz-Content-Sha256','X-Amz-Date','X-Amz-Algorithm','X-Amz-Credential','X-Amz-Security-Token',
 	'X-Amz-Signature','X-Amz-SignedHeaders'];
+const s3Headers = ['x-amz-security-token'];
+const v2Params = ['AWSAccessKeyId', 'Action', 'SignatureMethod', 'SignatureVersion', 'Timestamp', 'Version', 'Signature'];
 
 var multiParams = [];
 
@@ -428,6 +430,9 @@ module.exports = {
 			s.securityDefinitions.hmac["in"] = 'header';
 
 			var sigV4Headers = false;
+            var sigS3Headers = false;
+            var sigV2Params = false;
+
 			if (src.metadata.signatureVersion) {
 				if (src.metadata.signatureVersion == 'v4') {
 					s.securityDefinitions.hmac.description = 'Amazon Signature authorization v4';
@@ -448,6 +453,42 @@ module.exports = {
 					s.parameters.Version.required = true;
 
 				}
+                else if (src.metadata.signatureVersion == 's3') {
+					s.securityDefinitions.hmac.description = 'Amazon S3 signature';
+					s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsS3';
+					sigS3Headers = true;
+
+					// https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
+
+					for (var h in s3Headers) {
+						var header = {};
+						header.name = s3Headers[h];
+						header["in"] = 'header';
+						header.type = 'string';
+						header.required = false;
+						s.parameters[s3Headers[h]] = header;
+					}
+
+                }
+                else if (src.metadata.signatureVersion == 'v2') {
+					s.securityDefinitions.hmac.description = 'Amazon Signature authorization v2';
+					s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv2';
+					sigV2Params = true;
+
+                    // https://docs.aws.amazon.com/general/latest/gr/signature-version-2.html
+
+					for (var p in v2Params) {
+						var param = {};
+						param.name = v2Params[p];
+						param["in"] = 'query';
+						param.type = 'string';
+						param.required = true;
+						s.parameters[v2Params[p]] = param;
+					}
+                }
+                else {
+                    console.log('Unknown signatureVersion '+src.metadata.signatureVersion);
+                }
 			}
 
 			s.security = [];
@@ -620,6 +661,22 @@ module.exports = {
 						for (var h in amzHeaders) {
 							var param = {};
 							param["$ref"] = '#/parameters/'+amzHeaders[h];
+							s.paths[url].parameters.push(param);
+						}
+					}
+					else if (sigS3Headers) {
+						s.paths[url].parameters = [];
+						for (var h in s3Headers) {
+							var param = {};
+							param["$ref"] = '#/parameters/'+s3Headers[h];
+							s.paths[url].parameters.push(param);
+						}
+					}
+					else if (sigV2Params) {
+						s.paths[url].parameters = [];
+						for (var p in v2Params) {
+							var param = {};
+							param["$ref"] = '#/parameters/'+v2Params[p];
 							s.paths[url].parameters.push(param);
 						}
 					}
