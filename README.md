@@ -1,8 +1,6 @@
 # aws2openapi
 Amazon Web Services API description to OpenApi (Swagger) 2.0 specification
 
-![logo](https://mermade.github.io/aws2openapi/logo.png)
-
 ## Work in progress - alpha quality
 
 ### Handles all current (v2) AWS json and xml specifications
