@@ -1,5 +1,5 @@
 var _ = require('lodash');
-var recurseotron = require('../openapi_optimise/common.js');
+var recurseotron = require('openapi_optimise/common.js');
 
 /*
 https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
