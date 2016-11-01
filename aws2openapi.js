@@ -4,11 +4,12 @@ var fs = require('fs');
 var path = require('path');
 var SwaggerParser = require('swagger-parser');
 var validator = require('is-my-json-valid');
+var rr = require('recursive-readdir');
 var aws2oa = require('./index.js');
 
 var swaggerSchema = require('./validation/swagger2Schema.json');
 
-var input = (process.argv.length>2 ? process.argv[2] : './aws-sdk-js/apis/mobileanalytics-2014-06-05.normal.json');
+function doit(input) {
 var outputDir = (process.argv.length>3 ? process.argv[3] : './aws/');
 if (!outputDir.endsWith('/')) outputDir += '/';
 
@@ -32,7 +33,6 @@ try {
 	console.log('  Has waiters version '+options.waiters.version);
 }
 catch (ex) {}
-
 
 var result = aws2oa.convert(aws,options,function(err,openapi){
 	if ((err) && (Object.keys(err).length>0)) {
@@ -60,7 +60,7 @@ var result = aws2oa.convert(aws,options,function(err,openapi){
 			console.log(errors);
 		}
 
-		var components = input.split('/');
+		var components = input.split('\\').join('/').split('/');
 		var filename = components[components.length-1];
 		filename = filename.replace('.normal.json','');
 		components = filename.split('-');
@@ -83,4 +83,22 @@ var result = aws2oa.convert(aws,options,function(err,openapi){
 if (!result) {
 	console.log('Failed conversion: %s',input);
 	process.exitCode = 1;
+}
+}
+
+var inputspec = process.argv[2];
+if (inputspec) {
+  //if (fs.existsSync(inputspec)) {
+  //  doit(inputspec);
+  //}
+  //else {
+    rr(inputspec, function(err, files) {
+	  for (var f in files) {
+	    var filename = files[f];
+		if (filename.indexOf('normal')>=0) {
+	      doit(filename);
+		}
+	  }
+	});
+  //}
 }

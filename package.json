@@ -18,11 +18,12 @@
   "author": "Mike Ralphson <mike.ralphson@gmail.com>",
   "license": "MIT",
   "dependencies": {
-   "openapi_optimise": "latest",
-   "yargs": "latest"
+    "openapi_optimise": "latest",
+    "recursive-readdir": "^2.1.0",
+    "yargs": "latest"
   },
   "devDependencies": {
-   "swagger-parser": "latest",
-   "is-my-json-valid": "latest"
+    "is-my-json-valid": "latest",
+    "swagger-parser": "latest"
   }
 }
