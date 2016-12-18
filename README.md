@@ -9,6 +9,8 @@ Resultant OpenApi specifications pass multiple validators
 
 ![screenshot](https://mermade.github.io/aws2openapi/screenshot.png)
 
+The results of this converter can be found [here](https://github.com/Mermade/openapi_specifications/tree/master/aws)
+
 ### TODO
 
 * ~~Fix input header parameter selectivity~~
