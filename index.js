@@ -177,6 +177,34 @@ function attachParameter(openapi,shape,parameter,required,location){
 	}
 }
 
+function convertRegex(pattern) {
+
+/* converted from coffeescript function https://raw.githubusercontent.com/drj11/posixbre/master/code/main.coffee */
+
+	var bre1token;
+	bre1token = function(tok) {
+		// In POSIX RE in a bracket expression \ matches itself.
+		if (/^\[/.test(tok)) {
+			tok = tok.replace(/\\/, '\\\\');
+		}
+		// In POSIX RE in a bracket expression an initial ] or initial ^] is allowed.
+		if (/^\[\^?\]/.test(tok)) {
+			return tok.replace(/]/, '\\]');
+		}
+		// okens for which we have to remove a leading backslash.
+		if (/^\\[(){}]$/.test(tok)) {
+			return tok[1];
+		}
+		// Tokens for which we have to add a leading backslash.
+		if (/^[+?|(){}]$/.test(tok)) {
+			return '\\' + tok;
+		}
+		// Everything else is unchanged
+		return tok;
+	};
+	return pattern.replace(/\[\^?\]?[^]]*\]|\\.|./g, bre1token);
+}
+
 function transformShape(openapi,shape){
 
 	if (shape.type == 'structure') shape.type = 'object';
@@ -213,7 +241,13 @@ function transformShape(openapi,shape){
 				var regex = new RegExp(shape.pattern);
 			}
 			catch (e) {
-				rename(shape,'pattern','x-pattern');
+				shape.pattern = convertRegex(shape.pattern);
+				try {
+					var regex = new RegExp(shape.pattern);
+				}
+				catch (ex) {
+					rename(shape,'pattern','x-pattern');
+				}
 			}
 		}
 	}
