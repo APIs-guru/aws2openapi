@@ -5,6 +5,7 @@ var path = require('path');
 var SwaggerParser = require('swagger-parser');
 var validator = require('is-my-json-valid');
 var rr = require('recursive-readdir');
+var yaml = require('js-yaml');
 var aws2oa = require('./index.js');
 
 var swaggerSchema = require('./validation/swagger2Schema.json');
@@ -12,6 +13,7 @@ var swaggerSchema = require('./validation/swagger2Schema.json');
 function doit(input) {
 var outputDir = (process.argv.length>3 ? process.argv[3] : './aws/');
 if (!outputDir.endsWith('/')) outputDir += '/';
+var outputYaml = (process.argv.length>4 ? (process.argv[4] == '-y') : false);
 
 console.log(input);
 var aws = require(path.resolve(input));
@@ -77,7 +79,12 @@ var result = aws2oa.convert(aws,options,function(err,openapi){
 			fs.mkdirSync(outputDir+prefix+'/'+version);
 		}
 		catch (e) {}
-		fs.writeFileSync(outputDir+prefix+'/'+version+'/swagger.json',JSON.stringify(openapi,null,2),'utf8');
+		if (outputYaml) {
+			fs.writeFileSync(outputDir+prefix+'/'+version+'/swagger.yaml',yaml.safeDump(openapi,{lineWidth: -1}),'utf8');
+		}
+		else {
+			fs.writeFileSync(outputDir+prefix+'/'+version+'/swagger.json',JSON.stringify(openapi,null,2),'utf8');
+		}
 	}
 });
 if (!result) {

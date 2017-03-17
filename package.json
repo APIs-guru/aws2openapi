@@ -18,6 +18,7 @@
   "author": "Mike Ralphson <mike.ralphson@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "js-yaml": "^3.8.2",
     "openapi_optimise": "latest",
     "recursive-readdir": "^2.1.0",
     "yargs": "latest"
