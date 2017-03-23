@@ -1,5 +1,8 @@
+var util = require('util');
 var _ = require('lodash');
 var recurseotron = require('openapi_optimise/common.js');
+
+var ourVersion = require('./package.json').version;
 
 /*
 https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
@@ -376,7 +379,9 @@ function transformShape(openapi,shape){
 			delete state.parent.locationName;
 		}
 		if (state.key == 'payload') {
-			delete state.parent.payload; // TODO
+			if (state.keys[state.keys.length-2] !== 'properties') {
+				delete state.parent.payload; // TODO
+			}
 		}
 		if (state.key == 'box') {
 			delete state.parent.box; // just indicates if this is model around a simple type
@@ -419,6 +424,12 @@ function postProcess(openapi,options){
 	});
 }
 
+function deparameterisePath(s){
+	const regex = /(\{.+?\})/g;
+	s = s.replace(regex,'{param}');
+	return s;
+}
+
 module.exports = {
 
 	convert : function(src,options,callback) {
@@ -445,12 +456,31 @@ module.exports = {
 			s.info.license = {};
 			s.info.license.name = 'Apache 2.0 License';
 			s.info.license.url = 'http://www.apache.org/licenses/';
+			s.info['x-providerName'] = 'aws.amazon.com';
+			s.info['x-serviceName'] = src.metadata.endpointPrefix;
+			
+			// TODO wrap in array
+			s.info['x-origin'] = {format:'swagger',version:'2.0',url:'https://raw.githubusercontent.com/aws/aws-sdk-js/master/apis/'+options.filename};
+			s.info['x-origin'].converter = {url:'https://github.com/mermade/aws2openapi',version:ourVersion,'x-apisguru-direct': true};
+
+			s.info['x-apiClientRegistration'] = {url:'https://portal.aws.amazon.com/gp/aws/developer/registration/index.html?nc2=h_ct'};
+			s.info['x-apisguru-categories'] = ['cloud'];
+			var preferred = true;
+			if (!options.preferred) options.preferred = [];
+			var prefEntry = options.preferred.find(function(e,i,a){
+				return e.endpointPrefix == src.metadata.endpointPrefix;
+			});
+			console.log(JSON.stringify(prefEntry));
+			if (prefEntry) preferred = (prefEntry.preferred == src.metadata.apiVersion);
+			s.info['x-preferred'] = preferred;
+
 			s.externalDocs = {};
 			s.externalDocs.description = 'Amazon Web Services documentation';
 			var epp = src.metadata.endpointPrefix.split('.');
 			s.externalDocs.url = 'https://aws.amazon.com/'+epp[epp.length-1]+'/';
 			s.host = src.metadata.endpointPrefix+'.amazonaws.com';
 			s.basePath = '/';
+			s['x-hasEquivalentPaths'] = false; // may get removed later
 			s.schemes = [];
 			s.consumes = [];
 			s.produces = [];
@@ -548,6 +578,7 @@ module.exports = {
 				s.produces.push('text/xml');
 			}
 			var addFragment = (protocol == 'ec2');
+			var pathCache = {};
 
 			s.paths = {};
 			s.definitions = {};
@@ -679,6 +710,10 @@ module.exports = {
 
 				var attached = false;
 				if (s.paths[url]) {
+					if (pathCache[deparameterisePath(url)]) {
+						s['x-hasEquivalentPaths'] = true;
+					}
+					pathCache[deparameterisePath(url)] = true;
 					if (s.paths[url][actionName]) {
 						addFragment = true;
 						url += '#'+p;
@@ -726,6 +761,13 @@ module.exports = {
 			}
 
 			postProcess(s,options);
+
+			if (addFragment) {
+				s['x-hasEquivalentPaths'] = true;
+			}
+			if (s['x-hasEquivalentPaths'] === false) {
+				delete s['x-hasEquivalentPaths'];
+			}
 
 			callback(err,s);
 

@@ -1,2 +1,3 @@
 #!/bin/sh
-node aws2openapi ../aws-sdk-js/apis ../openapi-definitions/aws_yaml -y
+node getPreferred ../aws-sdk-js/apis
+node aws2openapi ../aws-sdk-js/apis ../openapi-definitions/aws -y
