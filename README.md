@@ -1,17 +1,17 @@
 # aws2openapi
 Amazon Web Services API description to OpenApi (Swagger) 2.0 specification
 
-## Work in progress - alpha quality
+## Work in progress - beta quality
 
 ### Handles all current (v2) AWS json and xml specifications
 
-Resultant OpenApi specifications pass multiple validators
+Resultant OpenApi specifications [pass](https://github.com/OAI/OpenAPI-Specification/blob/master/schemas/v2.0/schema.json) [multiple](https://github.com/apigee-127/sway) [validators](https://github.com/BigstickCarpet/swagger-parser)
 
 ![screenshot](https://mermade.github.io/aws2openapi/screenshot.png)
 
 The results of this converter can be found [here](https://github.com/Mermade/openapi_specifications/tree/master/aws)
 
-### TODO
+### TODO **help wanted**
 
 * ~~Fix input header parameter selectivity~~
 * ~~Process protocol:ec2~~
@@ -24,3 +24,4 @@ The results of this converter can be found [here](https://github.com/Mermade/ope
 * Test path-with-fragment hack works
 * Test paths with hardcoded ?parameters work
 * Validate xml-handling keyword translations
+* Integrate with [APIs.guru](https://github.com/APIs-guru/openapi-directory)
