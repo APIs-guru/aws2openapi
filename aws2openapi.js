@@ -83,6 +83,11 @@ function doit(input) {
 				fs.mkdirSync(outputDir+prefix+'/'+version);
 			}
 			catch (e) {}
+
+			var origin = openapi.info['x-origin'];
+			var lastOrigin = origin[origin.length-1];
+			lastOrigin.url = lastOrigin.url.replace('{filename}',prefix+'/'+version+'/swagger.'+(outputYaml ? 'yaml' : 'json'));
+
 			if (outputYaml) {
 				fs.writeFileSync(outputDir+prefix+'/'+version+'/swagger.yaml',yaml.safeDump(openapi,{lineWidth: -1}),'utf8');
 			}

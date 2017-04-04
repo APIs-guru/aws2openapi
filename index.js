@@ -459,10 +459,13 @@ module.exports = {
 			s.info['x-providerName'] = 'aws.amazon.com';
 			s.info['x-serviceName'] = src.metadata.endpointPrefix;
 			
-			// TODO wrap in array
-			s.info['x-origin'] = {format:'swagger',version:'2.0',url:'https://raw.githubusercontent.com/aws/aws-sdk-js/master/apis/'+options.filename};
-			s.info['x-origin'].converter = {url:'https://github.com/mermade/aws2openapi',version:ourVersion,'x-apisguru-direct': true};
-
+			var xorigin = [];
+			var origin = {contentType:'application/json',url:'https://raw.githubusercontent.com/aws/aws-sdk-js/master/apis/'+options.filename,converter:{url:'https://github.com/mermade/aws2openapi',version:ourVersion}};
+			var converted = {format:'swagger',version:'2.0',url:'https://raw.githubusercontent.com/mermade/openapi-definitions/master/aws/{filename}','x-apisguru-direct': true};
+			xorigin.push(origin);
+			xorigin.push(converted);
+			s.info['x-origin'] = xorigin;
+			
 			s.info['x-apiClientRegistration'] = {url:'https://portal.aws.amazon.com/gp/aws/developer/registration/index.html?nc2=h_ct'};
 			s.info['x-apisguru-categories'] = ['cloud'];
 			var preferred = true;
