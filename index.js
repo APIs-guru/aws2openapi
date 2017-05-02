@@ -456,7 +456,7 @@ module.exports = {
 			s.info.license = {};
 			s.info.license.name = 'Apache 2.0 License';
 			s.info.license.url = 'http://www.apache.org/licenses/';
-			s.info['x-providerName'] = 'aws.amazon.com';
+			s.info['x-providerName'] = 'amazonaws.com';
 			s.info['x-serviceName'] = src.metadata.endpointPrefix;
 			
 			var xorigin = [];
