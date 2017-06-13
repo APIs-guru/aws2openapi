@@ -9,7 +9,7 @@ Resultant OpenApi specifications [pass](https://github.com/OAI/OpenAPI-Specifica
 
 ![screenshot](https://mermade.github.io/aws2openapi/screenshot.png)
 
-The results of this converter can be found [here](https://github.com/Mermade/openapi_specifications/tree/master/aws)
+The results of this converter can be found [here](https://github.com/APIs-guru/openapi-directory/tree/master/APIs/amazonaws.com)
 
 ### TODO **help wanted**
 
@@ -24,4 +24,3 @@ The results of this converter can be found [here](https://github.com/Mermade/ope
 * Test path-with-fragment hack works
 * Test paths with hardcoded ?parameters work
 * Validate xml-handling keyword translations
-* Integrate with [APIs.guru](https://github.com/APIs-guru/openapi-directory)
