@@ -194,7 +194,7 @@ function convertRegex(pattern) {
 		if (/^\[\^?\]/.test(tok)) {
 			return tok.replace(/]/, '\\]');
 		}
-		// okens for which we have to remove a leading backslash.
+		// Tokens for which we have to remove a leading backslash.
 		if (/^\\[(){}]$/.test(tok)) {
 			return tok[1];
 		}
