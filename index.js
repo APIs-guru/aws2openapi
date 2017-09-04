@@ -403,10 +403,14 @@ function transformShape(openapi,shape){
 	return shape;
 }
 
+function isEqualParameter(a,b) {
+    return ((a.name == b.name) && (a.in == b.in));
+}
+
 function postProcess(openapi,options){
 	recurseotron.forEachAction(openapi,function(action){
 		if (action.parameters) {
-			action.parameters = _.uniqWith(action.parameters,_.isEqual);
+			action.parameters = _.uniqWith(action.parameters,isEqualParameter);
 		}
 
 		if (options.waiters) {
