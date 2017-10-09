@@ -486,7 +486,7 @@ module.exports = {
 			s.host = src.metadata.endpointPrefix+'.amazonaws.com';
 			s.basePath = '/';
 			s['x-hasEquivalentPaths'] = false; // may get removed later
-			s.schemes = [];
+			s.schemes = ['https']; // GitHub issue #3
 			s.consumes = [];
 			s.produces = [];
 
