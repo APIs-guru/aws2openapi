@@ -389,6 +389,9 @@ function transformShape(openapi,shape){
 		if (state.key == 'idempotencyToken') {
 			delete state.parent.idempotencyToken; // TODO
 		}
+		if (state.key == 'jsonvalue') {
+			delete state.parent.jsonvalue; // TODO
+		}
 		if (state.key == 'queryName') {
 			delete state.parent.queryName; // TODO ec2 only
 		}
