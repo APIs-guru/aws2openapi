@@ -205,6 +205,10 @@ function convertRegex(pattern) {
 		// Everything else is unchanged
 		return tok;
 	};
+    // In POSIX RE, (?<!) is a negative lookbehind, which isn't supported in JS.
+    // We strip the negative lookbehind, creating a more permissive regex.
+    pattern = pattern.replace(/\(\?\<\![^)]*\)/g, '');
+
 	return pattern.replace(/\[\^?\]?[^]]*\]|\\.|./g, bre1token);
 }
 
