@@ -441,6 +441,43 @@ function deparameterisePath(s){
 	return s;
 }
 
+function doit(methodUri,op,pi) {
+    methodUri.replace(/(\{.+?\})/g,function(match,group1){
+        let name = match.replace('{','').replace('}','');
+        let param = (op.parameters||[]).concat(pi.parameters||[]).find(function(e,i,a){
+            return ((e.name == name) && (e.in == 'path'));
+        });
+        if (!param) {
+            console.warn('Missing path parameter '+match);
+            let nparam = {};
+            nparam.name = name;
+            nparam.type = 'string';
+            nparam.in = 'path';
+            nparam.required = true;
+            op.parameters.push(nparam); // correct for missing path parameters (2?)
+        }
+        return match;
+    });
+}
+
+function fillInMissingPathParameters(openapi) {
+    for (let p in openapi.paths) {
+        let pi = openapi.paths[p];
+        for (let o in pi) {
+            if (['get','post','put','patch','delete','head','options'].indexOf(o)>=0) {
+                let op = pi[o];
+                doit(p,op,pi);
+            }
+        }
+    }
+}
+
+function patches(openapi) {
+    if (openapi.info["x-serviceName"] === 'data.mediastore') {
+        delete openapi.definitions.GetObjectResponse.required;
+    }
+}
+
 module.exports = {
 
 	convert : function(src,options,callback) {
@@ -457,13 +494,14 @@ module.exports = {
 			s.info.title = src.metadata.serviceFullName;
 			if (src.documentation) s.info.description = clean(src.documentation);
 			s.info["x-logo"] = {};
-			s.info["x-logo"].url = 'https://media.amazonwebservices.com/blog/2007/big_pbaws_logo_300px.jpg';
+			s.info["x-logo"].url = 'https://twitter.com/awscloud/profile_image?size=original';
 			s.info["x-logo"].backgroundColor = '#FFFFFF';
 			s.info.termsOfService = 'https://aws.amazon.com/service-terms/';
 			s.info.contact = {};
 			s.info.contact.name = 'Mike Ralphson';
 			s.info.contact.email = 'mike.ralphson@gmail.com';
 			s.info.contact.url = 'https://github.com/mermade/aws2openapi';
+            s.info.contact["x-twitter"] = 'PermittedSoc';
 			s.info.license = {};
 			s.info.license.name = 'Apache 2.0 License';
 			s.info.license.url = 'http://www.apache.org/licenses/';
@@ -780,6 +818,10 @@ module.exports = {
 			if (s['x-hasEquivalentPaths'] === false) {
 				delete s['x-hasEquivalentPaths'];
 			}
+
+            fillInMissingPathParameters(s); // AWS getting sloppy
+
+            patches(s); // extend if necessary
 
 			callback(err,s);
 
