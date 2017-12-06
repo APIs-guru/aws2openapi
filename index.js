@@ -770,7 +770,7 @@ module.exports = {
 					}
 					else {
 						s.paths[url][actionName] = action;
-						attached = false;
+						attached = true;
 					}
 				}
 				if (!attached) {
