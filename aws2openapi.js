@@ -71,10 +71,15 @@ function doit(input) {
 			filename = filename.replace('.normal.json','');
 			components = filename.split('-');
 			var prefix = components[0];
-			if (!components[1].startsWith('2')) {
-				prefix += '-' + components[1];
+            let i = 1;
+			while (!components[i].startsWith('2')) {
+				prefix += '-' + components[i];
+                i++;
 			}
-			var version = filename.replace(prefix+'-','');
+            var version = filename.replace(prefix+'-','');
+
+            openapi.info["x-serviceName"] = prefix;
+
 			try {
 				fs.mkdirSync(outputDir+prefix);
 			}
