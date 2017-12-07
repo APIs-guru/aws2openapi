@@ -518,7 +518,7 @@ module.exports = {
 			var preferred = true;
 			if (!options.preferred) options.preferred = [];
 			var prefEntry = options.preferred.find(function(e,i,a){
-				return e.endpointPrefix == src.metadata.endpointPrefix;
+				return e.serviceName === options.serviceName;
 			});
 			console.log(JSON.stringify(prefEntry));
 			if (prefEntry) preferred = (prefEntry.preferred == src.metadata.apiVersion);

@@ -1,12 +1,13 @@
 'use strict';
 
-var fs = require('fs');
-var path = require('path');
-var SwaggerParser = require('swagger-parser');
-var validator = require('is-my-json-valid');
-var rr = require('recursive-readdir');
-var yaml = require('js-yaml');
-var aws2oa = require('./index.js');
+const fs = require('fs');
+const path = require('path');
+const SwaggerParser = require('swagger-parser');
+const validator = require('is-my-json-valid');
+const rr = require('recursive-readdir');
+const yaml = require('js-yaml');
+const aws2oa = require('./index.js');
+const helpers = require('./helpers.js');
 
 var swaggerSchema = require('./validation/swagger2Schema.json');
 var preferred = require('./preferred.json');
@@ -41,6 +42,9 @@ function doit(input) {
 	var filename = components[components.length-1];
 	options.filename = filename;
 	options.preferred = preferred;
+	filename = filename.replace('.normal.json','');
+    let prefix = helpers.extractServiceName(filename);
+    options.serviceName = prefix;
 
 	var result = aws2oa.convert(aws,options,function(err,openapi){
 		if ((err) && (Object.keys(err).length>0)) {
@@ -68,14 +72,6 @@ function doit(input) {
 				console.log(errors);
 			}
 
-			filename = filename.replace('.normal.json','');
-			components = filename.split('-');
-			var prefix = components[0];
-            let i = 1;
-			while (!components[i].startsWith('2')) {
-				prefix += '-' + components[i];
-                i++;
-			}
             var version = filename.replace(prefix+'-','');
 
             openapi.info["x-serviceName"] = prefix;

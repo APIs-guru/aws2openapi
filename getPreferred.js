@@ -1,20 +1,22 @@
 'use strict';
 
-var fs = require('fs');
-var path = require('path');
-var rr = require('recursive-readdir');
-var yaml = require('js-yaml');
+const fs = require('fs');
+const path = require('path');
+const rr = require('recursive-readdir');
+const yaml = require('js-yaml');
+const helpers = require('./helpers.js');
 
 var results = [];
 
 function doit(input) {
 	var src = JSON.parse(fs.readFileSync(input,'utf8'));
-	if (src.metadata && src.metadata.apiVersion && src.metadata.endpointPrefix) {
+    let serviceName = helpers.extractServiceName(input);
+	if (src.metadata && src.metadata.apiVersion) {
 		var entry = results.find(function(e,i,a){
-			return e.endpointPrefix == src.metadata.endpointPrefix;
+			return e.serviceName == serviceName;
 		});
 		if (!entry) {
-			entry = {endpointPrefix: src.metadata.endpointPrefix, versions:[]};
+			entry = {serviceName: serviceName, versions:[]};
 			results.push(entry);
 		}
 		entry.versions.push(src.metadata.apiVersion);
