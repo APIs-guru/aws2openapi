@@ -26,5 +26,16 @@
   "devDependencies": {
     "is-my-json-valid": "latest",
     "swagger-parser": "latest"
-  }
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mermade/aws2openapi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mermade/aws2openapi/issues"
+  },
+  "homepage": "https://github.com/mermade/aws2openapi#readme"
 }
