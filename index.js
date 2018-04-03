@@ -405,7 +405,7 @@ function transformShape(openapi,shape){
 		if (state.key == 'deprecated') {
 			delete state.parent.deprecated; // TODO revisit this for OpenApi 3.x ?
 		}
-        if (state.key === 'required') {
+        if (state.key === 'required' && Array.isArray(state.parent.required)) {
             if (!state.parent.required.length) {
                 delete state.parent.required;
             }
