@@ -405,6 +405,11 @@ function transformShape(openapi,shape){
 		if (state.key == 'deprecated') {
 			delete state.parent.deprecated; // TODO revisit this for OpenApi 3.x ?
 		}
+        if (state.key === 'required') {
+            if (!state.parent.required.length) {
+                delete state.parent.required;
+            }
+        }
 	});
 
 	return shape;
@@ -507,12 +512,12 @@ module.exports = {
 			s.info.license.url = 'http://www.apache.org/licenses/';
 			s.info['x-providerName'] = 'amazonaws.com';
 			s.info['x-serviceName'] = src.metadata.endpointPrefix;
-			
+
 			var xorigin = [];
 			var origin = {contentType:'application/json',url:'https://raw.githubusercontent.com/aws/aws-sdk-js/master/apis/'+options.filename,converter:{url:'https://github.com/mermade/aws2openapi',version:ourVersion},'x-apisguru-direct': true};
 			xorigin.push(origin);
 			s.info['x-origin'] = xorigin;
-			
+
 			s.info['x-apiClientRegistration'] = {url:'https://portal.aws.amazon.com/gp/aws/developer/registration/index.html?nc2=h_ct'};
 			s.info['x-apisguru-categories'] = ['cloud'];
 			var preferred = true;
