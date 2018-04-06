@@ -410,6 +410,15 @@ function transformShape(openapi,shape){
                 delete state.parent.required;
             }
         }
+        if ((state.key === 'event') && (typeof state.parent.event === 'boolean'))  {
+            delete state.parent.event;
+        }
+        if (state.key === 'eventpayload') {
+            delete state.parent.eventpayload;
+        }
+        if (state.key === 'eventstream') {
+            delete state.parent.eventstream;
+        }
 	});
 
 	return shape;
