@@ -313,6 +313,7 @@ function transformShape(openapi,shape){
 	delete shape.fault;
 	delete shape.error;
 	delete shape.sensitive;
+	delete shape.synthetic;
 	delete shape.wrapper; // xml
 	delete shape.xmlOrder; // xml
 
