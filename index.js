@@ -55,6 +55,13 @@ function rename(obj,key,newKey){
 	}
 }
 
+function checkDef(openapi,name) {
+    if (!openapi.definitions[name]) {
+        console.log('Forcing definition of:',name);
+        openapi.definitions[name] = {};
+    }
+}
+
 function findLocationsForShape(openapi,shape,shapeName){
 	var result = [];
 	for (var p in openapi.paths) {
@@ -287,8 +294,10 @@ function transformShape(openapi,shape){
 		shape.items.properties = {};
 		shape.items.properties.key = {};
 		shape.items.properties.key["$ref"] = '#/definitions/'+shape.key.shape;
+        checkDef(openapi,shape.key.shape);
 		shape.items.properties.value = {};
 		shape.items.properties.value["$ref"] = '#/definitions/'+shape.value.shape;
+        checkDef(openapi,shape.value.shape);
 		delete shape.key;
 		delete shape.value;
 	}
@@ -321,6 +330,7 @@ function transformShape(openapi,shape){
 		if (state.key == 'shape') {
 			state.parent["$ref"] = '#/definitions/'+obj;
 			delete state.parent[state.key];
+            checkDef(openapi,obj);
 		}
 		if (state.key == 'documentation') {
 			state.parent.description = clean(obj);
@@ -669,6 +679,7 @@ module.exports = {
 					if (op.output && op.output.shape) {
 						success.schema = {};
 						success.schema["$ref"] = '#/definitions/'+op.output.shape;
+                        checkDef(s,op.output.shape);
 
 						if (options.examples && options.examples.examples[p]) {
 							for (var e in options.examples.examples[p]) {
@@ -689,6 +700,7 @@ module.exports = {
 					param.required = true;
 					param.schema = {};
 					param.schema["$ref"] = '#/definitions/'+op.input.shape;
+                    checkDef(s,op.input.shape);
 					if (!action.parameters) {
 						action.parameters = [];
 					}
@@ -746,6 +758,7 @@ module.exports = {
 					if (error.exception) failure["x-aws-exception"] = error.exception;
 					failure.schema = {};
 					failure.schema["$ref"] = '#/definitions/'+error.shape;
+                    checkDef(s,error.shape);
 					action.responses[error.error ? error.error.httpStatusCode : defStatus++] = failure; //TODO fake statuses created. Map to combined output schema with a 'oneOf'?
 				}
 
