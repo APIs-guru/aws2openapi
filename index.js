@@ -57,7 +57,7 @@ function rename(obj,key,newKey){
 
 function checkDef(openapi,name) {
     if (!openapi.definitions[name]) {
-        console.log('Forcing definition of:',name);
+        //console.log('Forcing definition of:',name);
         openapi.definitions[name] = {};
     }
 }
