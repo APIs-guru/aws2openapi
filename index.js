@@ -416,6 +416,15 @@ function transformShape(openapi,shape){
         if (state.key == 'deprecated') {
             delete state.parent.deprecated; // TODO revisit this for OpenApi 3.x ?
         }
+        if (state.key == 'deprecatedMessage') {
+            if (!state.parent.description) {
+                state.parent.description = state.parent.deprecatedMessage;
+            }
+            else {
+                state.parent["x-deprecation"] = state.parent.deprecatedMessage;
+            }
+            delete state.parent.deprecatedMessage;
+        }
         if (state.key === 'required' && Array.isArray(state.parent.required)) {
             if (!state.parent.required.length) {
                 delete state.parent.required;
