@@ -791,6 +791,26 @@ module.exports = {
                     if (multiple.url == '') multiple.url = url;
                 }
 
+                if (url.indexOf('?')>=0) {
+                    let hparams = url.split('?')[1].split('&');    
+                    if (!path.parameters) path.parameters = []; 
+                    for (let p of hparams) {
+                        let param = {};
+                        param.name = p.split('=')[0];
+                        param.in = 'query';
+                        param.required = true;
+                        param.type = 'string';
+                        let val = p.split('=')[1];
+                        if (val) {
+                            param.enum = [val];
+                        }
+                        else param.allowEmptyValue = true;
+                        console.log('Hardcoded param',param.name);
+                        action.parameters.push(param);
+                    }
+                    url = url.split('?')[0];
+                }
+
                 if (addFragment) {
                     url += '#'+p;
                 }
