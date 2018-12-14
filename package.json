@@ -19,7 +19,7 @@
   "license": "MIT",
   "dependencies": {
     "js-yaml": "^3.8.2",
-    "openapi_optimise": "latest",
+    "openapi_optimise": "1.0.4",
     "recursive-readdir": "^2.1.0",
     "yargs": "latest"
   },
