@@ -9,10 +9,12 @@ https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
 https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-swagger-extensions.html
 */
 
-const amzHeaders = ['Action','Version','X-Amz-Content-Sha256','X-Amz-Date','X-Amz-Algorithm','X-Amz-Credential','X-Amz-Security-Token',
+const amzHeaders = ['X-Amz-Content-Sha256','X-Amz-Date','X-Amz-Algorithm','X-Amz-Credential','X-Amz-Security-Token',
     'X-Amz-Signature','X-Amz-SignedHeaders'];
 const s3Headers = ['x-amz-security-token'];
 const v2Params = ['AWSAccessKeyId', 'Action', 'SignatureMethod', 'SignatureVersion', 'Timestamp', 'Version', 'Signature'];
+const v4Required = ['Action', 'Version'];
+const v4Params = [].concat(v4Required, amzHeaders);
 
 var multiParams = [];
 
@@ -589,6 +591,15 @@ module.exports = {
 
                     // https://docs.aws.amazon.com/IAM/latest/APIReference/CommonParameters.html
 
+                    for (var p in v4Required) {
+                        var param = {};
+                        param.name = v4Required[p];
+                        param["in"] = 'query';
+                        param.type = 'string';
+                        param.required = true;
+                        s.parameters[v4Required[p]] = param;
+                    }
+
                     for (var h in amzHeaders) {
                         var header = {};
                         header.name = amzHeaders[h];
@@ -597,8 +608,6 @@ module.exports = {
                         header.required = false;
                         s.parameters[amzHeaders[h]] = header;
                     }
-                    s.parameters.Action.required = true;
-                    s.parameters.Version.required = true;
 
                 }
                 else if (src.metadata.signatureVersion == 's3') {
@@ -834,9 +843,9 @@ module.exports = {
                     s.paths[url] = path; // path contains action
                     if (sigV4Headers) {
                         s.paths[url].parameters = [];
-                        for (var h in amzHeaders) {
+                        for (var h in v4Params) {
                             var param = {};
-                            param["$ref"] = '#/parameters/'+amzHeaders[h];
+                            param["$ref"] = '#/parameters/'+v4Params[h];
                             s.paths[url].parameters.push(param);
                         }
                     }
