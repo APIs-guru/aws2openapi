@@ -1,8 +1,9 @@
 var util = require('util');
 var _ = require('lodash');
-var recurseotron = require('openapi_optimise/common.js');
+var recurse = require('reftools/lib/recurse.js').recurse;
 
 var ourVersion = require('./package.json').version;
+var actions = ['get','post','put','patch','delete','head','options','trace'];
 
 /*
 https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
@@ -23,9 +24,9 @@ Removes starting and ending <p></p> markup if no other <p>'s exist
 */
 function clean(s){
     var org = s;
-    if (s.startsWith('<p>')) s = s.substr(3);
-    if (s.endsWith('</p>')) s = s.substr(0,s.length-4);
-    if ((s.indexOf('<p>')>=0) || (s.indexOf('</p>')>=0)) return org;
+    if (s && s.startsWith('<p>')) s = s.substr(3);
+    if (s && s.endsWith('</p>')) s = s.substr(0,s.length-4);
+    if (s && ((s.indexOf('<p>')>=0) || (s.indexOf('</p>')>=0))) return org;
     return s;
 }
 
@@ -66,8 +67,8 @@ function findLocationsForShape(openapi,shape,shapeName){
     var result = [];
     for (var p in openapi.paths) {
         var path = openapi.paths[p];
-        for (var a in recurseotron.actions){
-            var action = path[recurseotron.actions[a]];
+        for (var a of actions){
+            var action = path[actions[a]];
             if (action) {
                 var ok = false;
                 for (var p in action.parameters) {
@@ -94,8 +95,8 @@ function findResponsesForShape(openapi,shape,shapeName){
     var result = [];
     for (var p in openapi.paths) {
         var path = openapi.paths[p];
-        for (var a in recurseotron.actions){
-            var action = path[recurseotron.actions[a]];
+        for (var a of actions){
+            var action = path[actions[a]];
             if (action) {
                 var ok = false;
                 for (var r in action.responses) {
@@ -116,12 +117,12 @@ function findLocationsForParameter(openapi,parameter){
     for (var p in openapi.paths) {
         var path = openapi.paths[p];
         if (p.indexOf('{'+parameter.locationName+'}')>=0) {
-            for (var a in recurseotron.actions) {
-                if (path[recurseotron.actions[a]]) {
+            for (var a of actions) {
+                if (path[actions[a]]) {
                     var location = {};
                     location.url = p;
-                    location.verb = recurseotron.actions[a]
-                    location.action = path[recurseotron.actions[a]];
+                    location.verb = actions[a]
+                    location.action = path[actions[a]];
                     result.push(location);
                 }
             }
@@ -326,45 +327,45 @@ function transformShape(openapi,shape){
     delete shape.wrapper; // xml
     delete shape.xmlOrder; // xml
 
-    recurseotron.recurse(shape,{},function(obj,state){
-        if (state.key == 'shape') {
-            state.parent["$ref"] = '#/definitions/'+obj;
-            delete state.parent[state.key];
+    recurse(shape,{},function(obj,key,state){
+        if (key == 'shape') {
+            obj["$ref"] = '#/definitions/'+obj[key];
+            delete obj[key];
             checkDef(openapi,obj);
         }
-        if (state.key == 'documentation') {
-            state.parent.description = clean(obj);
-            delete state.parent.documentation;
+        if (key == 'documentation') {
+            obj.description = clean(obj.documentation);
+            delete obj.documentation;
         }
-        if ((state.key == 'location') && (obj == 'headers')) {
-            delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]]; // TODO
+        if ((key == 'location') && (obj[key] == 'headers')) {
+            delete obj[key];
         }
-        if ((state.key == 'location') && (obj == 'statusCode')) {
-            delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]]; // should already be pointed to by 'output'
+        if ((key == 'location') && (obj[key] == 'statusCode')) {
+            delete obj[key]; // should already be pointed to by 'output'
         }
-        if ((state.key == 'location') && (obj == 'header')) {
-            var header = state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
+        if ((key == 'location') && (obj[key] == 'header')) {
+            var header = obj[key]; // JRM clone
             var newHeader = _.cloneDeep(header);
 
             var required = shape.required;
-            var index = (required ? required.indexOf(state.keys[state.keys.length-2]) : -1);
+            var index = (required ? required.indexOf(state.pkey) : -1);
             if (index>=0) {
                 required.splice(index,1);
                 if (required.length<=0) delete shape.required;
             }
 
             // we now need to know which operation (or response?) is referencing this shape
-            var shapeName = state.keys[state.keys.length-1];
+            var shapeName = state.pkey;
             attachHeader(openapi,shape,shapeName,newHeader,index>=0);
 
-            delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
+            delete state.parent[state.pkey];
         }
-        if ((state.key == 'location') && ((obj == 'uri') || (obj == 'querystring'))) {
-            var param = state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
+        if ((key == 'location') && ((obj[key] == 'uri') || (obj[key] == 'querystring'))) {
+            var param = state.parent[state.pkey];
             var newParam = _.cloneDeep(param);
 
             var required = shape.required;
-            var index = (required ? required.indexOf(state.keys[state.keys.length-2]) : -1);
+            var index = (required ? required.indexOf(state.pkey) : -1);
             if (index>=0) { // should always be true
                 required.splice(index,1);
                 if (required.length<=0) delete shape.required;
@@ -373,71 +374,71 @@ function transformShape(openapi,shape){
             // we now need to know which operation (or response?) is referencing this shape
             attachParameter(openapi,shape,newParam,index>=0,param.location);
 
-            delete state.parents[state.parents.length-2][state.keys[state.keys.length-2]];
+            delete state.parent[state.pkey];
         }
-        if (state.key == 'xmlNamespace') {
+        if (key == 'xmlNamespace') {
             if (!shape.xml) shape.xml = {};
-            shape.xml.namespace = obj.uri;
-            delete state.parent.xmlNamespace;
+            shape.xml.namespace = obj[key].uri;
+            delete obj.xmlNamespace;
         }
-        if (state.key == 'xmlAttribute') {
+        if (key == 'xmlAttribute') {
             if (!shape.xml) shape.xml = {};
-            shape.xml.attribute = obj;
-            delete state.parent.xmlAttribute;
+            shape.xml.attribute = obj[key];
+            delete obj.xmlAttribute;
         }
-        if (state.key == 'flattened') {
+        if (key == 'flattened') {
             if (!shape.xml) shape.xml = {};
-            shape.xml.wrapped = !obj;
-            delete state.parent.flattened;
+            shape.xml.wrapped = !obj[key];
+            delete obj.flattened;
         }
-        if (state.key == 'locationName') {
-            delete state.parent.locationName;
+        if (key == 'locationName') {
+            delete obj.locationName;
         }
-        if (state.key == 'payload') {
-            if (state.keys[state.keys.length-2] !== 'properties') {
-                delete state.parent.payload; // TODO
+        if (key == 'payload') {
+            if (state.pkey !== 'properties') {
+                delete obj.payload; // TODO
             }
         }
-        if (state.key == 'box') {
-            delete state.parent.box; // just indicates if this is model around a simple type
+        if (key == 'box') {
+            delete obj.box; // just indicates if this is model around a simple type
         }
-        if (state.key == 'idempotencyToken') {
-            delete state.parent.idempotencyToken; // TODO
+        if (key == 'idempotencyToken') {
+            delete obj.idempotencyToken; // TODO
         }
-        if (state.key == 'jsonvalue') {
-            delete state.parent.jsonvalue; // TODO
+        if (key == 'jsonvalue') {
+            delete obj.jsonvalue; // TODO
         }
-        if (state.key == 'queryName') {
-            delete state.parent.queryName; // TODO ec2 only
+        if (key == 'queryName') {
+            delete obj.queryName; // TODO ec2 only
         }
-        if (state.key == 'streaming') {
-            delete state.parent.streaming; // TODO revisit this for OpenApi 3.x ?
+        if (key == 'streaming') {
+            delete obj.streaming; // TODO revisit this for OpenApi 3.x ?
         }
-        if (state.key == 'deprecated') {
-            delete state.parent.deprecated; // TODO revisit this for OpenApi 3.x ?
+        if (key == 'deprecated') {
+            delete obj.deprecated; // TODO revisit this for OpenApi 3.x ?
         }
-        if (state.key == 'deprecatedMessage') {
-            if (!state.parent.description) {
-                state.parent.description = state.parent.deprecatedMessage;
+        if (key == 'deprecatedMessage') {
+            if (!obj.description) {
+                obj.description = obj.deprecatedMessage;
             }
             else {
-                state.parent["x-deprecation"] = state.parent.deprecatedMessage;
+                obj["x-deprecation"] = obj.deprecatedMessage;
             }
-            delete state.parent.deprecatedMessage;
+            delete obj.deprecatedMessage;
         }
-        if (state.key === 'required' && Array.isArray(state.parent.required)) {
-            if (!state.parent.required.length) {
-                delete state.parent.required;
+        if (key === 'required' && Array.isArray(obj.required)) {
+            if (!obj.required.length) {
+                delete obj.required;
             }
         }
-        if ((state.key === 'event') && (typeof state.parent.event === 'boolean'))  {
-            delete state.parent.event;
+        if ((key === 'event') && (typeof obj.event === 'boolean'))  {
+            delete obj.event;
         }
-        if (state.key === 'eventpayload') {
-            delete state.parent.eventpayload;
+        if (key === 'eventpayload') {
+            delete obj.eventpayload;
         }
-        if (state.key === 'eventstream') {
-            delete state.parent.eventstream;
+        if (key === 'eventstream') {
+            delete obj.eventstream;
         }
     });
 
@@ -449,7 +450,7 @@ function isEqualParameter(a,b) {
 }
 
 function postProcess(openapi,options){
-    recurseotron.forEachAction(openapi,function(action){
+    Object.keys(openapi.paths).forEach(function(action){
         if (action.parameters) {
             action.parameters = _.uniqWith(action.parameters,isEqualParameter);
         }

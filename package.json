@@ -19,8 +19,9 @@
   "license": "MIT",
   "dependencies": {
     "js-yaml": "^3.8.2",
-    "openapi_optimise": "latest",
+    "lodash": "^4.17.11",
     "recursive-readdir": "^2.1.0",
+    "reftools": "^1.0.4",
     "yargs": "latest"
   },
   "devDependencies": {
