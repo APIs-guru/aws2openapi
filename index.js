@@ -333,7 +333,7 @@ function transformShape(openapi,shape){
         if (key == 'shape') {
             obj["$ref"] = '#/definitions/'+obj[key];
             delete obj[key];
-            checkDef(openapi,obj);
+            checkDef(openapi,obj[key]);
         }
         if (key == 'documentation') {
             obj.description = clean(obj.documentation);
@@ -421,11 +421,9 @@ function transformShape(openapi,shape){
         }
         if (key == 'deprecatedMessage') {
             if (!obj.description) {
-                obj.description = obj.deprecatedMessage;
+                obj.description = '';
             }
-            else {
-                obj["x-deprecation"] = obj.deprecatedMessage;
-            }
+            obj.description += obj.deprecatedMessage;
             delete obj.deprecatedMessage;
         }
         if (key === 'required' && Array.isArray(obj.required)) {
