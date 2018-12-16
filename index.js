@@ -332,8 +332,8 @@ function transformShape(openapi,shape){
     recurse(shape,{},function(obj,key,state){
         if (key == 'shape') {
             obj["$ref"] = '#/definitions/'+obj[key];
-            delete obj[key];
             checkDef(openapi,obj[key]);
+            delete obj[key];
         }
         if (key == 'documentation') {
             obj.description = clean(obj.documentation);
@@ -483,7 +483,7 @@ function doit(methodUri,op,pi) {
             return ((e.name == name) && (e.in == 'path'));
         });
         if (!param) {
-            console.warn('Missing path parameter '+match);
+            //console.warn('Missing path parameter '+match);
             let nparam = {};
             nparam.name = name;
             nparam.type = 'string';
@@ -800,8 +800,8 @@ module.exports = {
                 }
 
                 if (url.indexOf('?')>=0) {
-                    let hparams = url.split('?')[1].split('&');    
-                    if (!path.parameters) path.parameters = []; 
+                    let hparams = url.split('?')[1].split('&');
+                    if (!path.parameters) path.parameters = [];
                     for (let p of hparams) {
                         let param = {};
                         param.name = p.split('=')[0];
@@ -813,7 +813,7 @@ module.exports = {
                             param.enum = [val];
                         }
                         else param.allowEmptyValue = true;
-                        console.log('Hardcoded param',param.name);
+                        //console.log('Hardcoded param',param.name);
                         action.parameters.push(param);
                     }
                     url = url.split('?')[0];
