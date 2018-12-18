@@ -22,7 +22,7 @@
     "lodash": "^4.17.11",
     "recursive-readdir": "^2.1.0",
     "reftools": "^1.0.4",
-    "yargs": "latest"
+    "yargs": "12.0.2"
   },
   "devDependencies": {
     "is-my-json-valid": "latest",
