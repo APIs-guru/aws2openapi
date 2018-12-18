@@ -249,6 +249,12 @@ function transformShape(openapi,shape){
         if (typeof shape.max !== 'undefined') {
             rename(shape,'max','maxLength');
         }
+        if (typeof shape.minLength === 'string') {
+            shape.minLength = parseInt(shape.minLength,10);
+        }
+        if (typeof shape.maxLength === 'string') {
+            shape.maxLength = parseInt(shape.maxLength,10);
+        }
         if (shape.sensitive) {
             shape.format = 'password';
             delete shape.sensitive;
@@ -272,6 +278,12 @@ function transformShape(openapi,shape){
     if (shape.type == 'integer') {
         rename(shape,'min','minimum');
         rename(shape,'max','maximum');
+        if (typeof shape.minimum === 'string') {
+            shape.minimum = parseInt(shape.maximum,10);
+        }
+        if (typeof shape.maximum === 'string') {
+            shape.maximum = parseInt(shape.maximum,10);
+        }
     }
 
     if (shape.type == 'timestamp') {
