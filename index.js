@@ -595,7 +595,7 @@ module.exports = {
             var sigV2Params = false;
 
             if (src.metadata.signatureVersion) {
-                if (src.metadata.signatureVersion == 'v4') {
+                if ((src.metadata.signatureVersion == 'v4') || (src.metadata.signatureVersion === 's3v4')) {
                     s.securityDefinitions.hmac.description = 'Amazon Signature authorization v4';
                     s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv4';
                     sigV4Headers = true;
