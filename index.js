@@ -483,9 +483,9 @@ function postProcess(openapi,options){
 }
 
 function deparameterisePath(s){
-    const regex = /(\{.+?\})/g;
-    s = s.replace(regex,'{param}');
-    return s;
+    return s
+        .replace(/(\{.+?\})/g,'{param}')
+        .replace(/#.*/, '');
 }
 
 function doit(methodUri,op,pi) {
@@ -681,8 +681,6 @@ module.exports = {
                 s.consumes.push('text/xml');
                 s.produces.push('text/xml');
             }
-            var addFragment = (protocol == 'ec2');
-            var pathCache = {};
 
             s.paths = {};
             s.definitions = {};
@@ -819,33 +817,74 @@ module.exports = {
                         param.name = p.split('=')[0];
                         param.in = 'query';
                         param.required = true;
-                        param.type = 'string';
                         let val = p.split('=')[1];
                         if (val) {
+                            param.type = 'string';
                             param.enum = [val];
                         }
-                        else param.allowEmptyValue = true;
+                        else {
+                            // A slightly funky way to describe a empty ONLY value
+                            // that must always be present (with required=true above)
+                            param.type = 'boolean';
+                            param.allowEmptyValue = true;
+                            param.enum = [true];
+                        }
                         //console.log('Hardcoded param',param.name);
                         action.parameters.push(param);
                     }
-                    url = url.split('?')[0];
+
+                    // Move query params to a fragment, so they're not strictly used, but
+                    // the paths become distinct, everything validates, and they can be
+                    // used by any tools that do understand them.
+                    url = url.replace('?', '#');
                 }
 
-                if (addFragment) {
-                    url += '#'+p;
+                // Work out a unique path identifier sufficient to look up the relevant
+                // path given a full request, for routing etc.
+                switch (src.metadata.protocol) {
+                    case 'rest-xml':
+                    case 'rest-json':
+                        // Identified by specific requestUri params.
+                        // Include all params from requestUri but with a # - already
+                        // done by the URL parsing above though.
+                        break;
+
+                    case 'query':
+                    case 'ec2':
+                        // Identified by Action={opName} parameter
+                        url += (url.indexOf('#') > -1 ? '&' : '#') + 'Action=' + op.name;
+                        action.parameters = (action.parameters || []).concat({
+                            name: 'Action',
+                            in: 'query',
+                            required: true,
+                            type: 'string',
+                            enum: [op.name]
+                        });
+                        break;
+
+                    case 'json':
+                        // Identified by X-Amz-Target={prefix.opName} header
+                        const amzTarget = src.metadata.targetPrefix + '.' + op.name;
+                        url += (url.indexOf('#') > -1 ? '&' : '#') + 'X-Amz-Target=' + amzTarget;
+                        action.parameters = (action.parameters || []).concat({
+                            name: 'X-Amz-Target',
+                            in: 'header',
+                            required: true,
+                            type: 'string',
+                            enum: [amzTarget]
+                        });
+                        break;
+
+                    default:
+                        throw new Error('Unknown protocol: ' + src.metadata.protocol);
                 }
 
                 var attached = false;
                 if (s.paths[url]) {
-                    if (pathCache[deparameterisePath(url)]) {
-                        s['x-hasEquivalentPaths'] = true;
-                    }
-                    pathCache[deparameterisePath(url)] = true;
                     if (s.paths[url][actionName]) {
-                        addFragment = true;
-                        url += '#'+p;
-                    }
-                    else {
+                        // Add an extra op-name param just to differentiate the path
+                        url += (url.indexOf('#') > -1 ? '&' : '#') + op.name;
+                    } else {
                         s.paths[url][actionName] = action;
                         attached = true;
                     }
@@ -889,10 +928,10 @@ module.exports = {
 
             postProcess(s,options);
 
-            if (addFragment) {
+            const paths = Object.keys(s.paths);
+            if (_.uniqBy(paths, deparameterisePath).length !== paths.length) {
                 s['x-hasEquivalentPaths'] = true;
-            }
-            if (s['x-hasEquivalentPaths'] === false) {
+            } else {
                 delete s['x-hasEquivalentPaths'];
             }
 
