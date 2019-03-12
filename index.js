@@ -839,6 +839,18 @@ module.exports = {
                     url = url.replace('?', '#');
                 }
 
+                if (op.input && op.input.shape) {
+                    // Add any other required query params to the URL fragment too
+                    const paramShape = src.shapes[op.input.shape];
+                    const requiredQueryParamNames = _.filter(paramShape.members, (member, memberName) =>
+                        member.location === 'querystring' && _.includes(paramShape.required, memberName)
+                    ).map((param) => param.locationName);
+
+                    if (requiredQueryParamNames.length > 0) {
+                        url += (url.indexOf('#') > -1 ? '&' : '#') + requiredQueryParamNames.join('&');
+                    }
+                }
+
                 // Work out a unique path identifier sufficient to look up the relevant
                 // path given a full request, for routing etc.
                 switch (src.metadata.protocol) {
