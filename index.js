@@ -525,6 +525,42 @@ function patches(openapi) {
     }
 }
 
+// Attach the given action at the given url/verb in a paths object.
+// This assumes there are no conflicts, and will overwrite existing
+// actions, so that should be checked first
+function attachOperation(paths, url, method, action, signatureVersion) {
+    if (paths[url]) {
+        paths[url][method] = action;
+        return;
+    }
+
+    paths[url] = { [method]: action };
+    if (signatureVersion === 4) {
+        paths[url].parameters = [];
+        for (var h in v4Params) {
+            var param = {};
+            param["$ref"] = '#/parameters/'+v4Params[h];
+            paths[url].parameters.push(param);
+        }
+    }
+    else if (signatureVersion === 3) {
+        paths[url].parameters = [];
+        for (var h in s3Headers) {
+            var param = {};
+            param["$ref"] = '#/parameters/'+s3Headers[h];
+            paths[url].parameters.push(param);
+        }
+    }
+    else if (signatureVersion === 2) {
+        paths[url].parameters = [];
+        for (var p in v2Params) {
+            var param = {};
+            param["$ref"] = '#/parameters/'+v2Params[p];
+            paths[url].parameters.push(param);
+        }
+    }
+}
+
 module.exports = {
 
     convert : function(src,options,callback) {
@@ -590,15 +626,13 @@ module.exports = {
             s.securityDefinitions.hmac.name = 'Authorization';
             s.securityDefinitions.hmac["in"] = 'header';
 
-            var sigV4Headers = false;
-            var sigS3Headers = false;
-            var sigV2Params = false;
+            var signatureVersion = null;
 
             if (src.metadata.signatureVersion) {
                 if ((src.metadata.signatureVersion == 'v4') || (src.metadata.signatureVersion === 's3v4')) {
                     s.securityDefinitions.hmac.description = 'Amazon Signature authorization v4';
                     s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv4';
-                    sigV4Headers = true;
+                    signatureVersion = 4;
 
                     // https://docs.aws.amazon.com/IAM/latest/APIReference/CommonParameters.html
 
@@ -624,7 +658,7 @@ module.exports = {
                 else if (src.metadata.signatureVersion == 's3') {
                     s.securityDefinitions.hmac.description = 'Amazon S3 signature';
                     s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsS3';
-                    sigS3Headers = true;
+                    signatureVersion = 3;
 
                     // https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
 
@@ -641,7 +675,7 @@ module.exports = {
                 else if (src.metadata.signatureVersion == 'v2') {
                     s.securityDefinitions.hmac.description = 'Amazon Signature authorization v2';
                     s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv2';
-                    sigV2Params = true;
+                    signatureVersion = 2;
 
                     // https://docs.aws.amazon.com/general/latest/gr/signature-version-2.html
 
@@ -687,14 +721,16 @@ module.exports = {
 
             for (var p in src.operations) {
                 var op = src.operations[p];
-                var path = {};
 
-                var action = {};
+                var action = {
+                    deprecated: !!op.deprecated
+                };
+
                 if (op.http) {
                     if (s.schemes.indexOf('http')<0) {
                         s.schemes.push('http');
                     }
-                    var actionName = op.http.method.toLocaleLowerCase();
+                    var method = op.http.method.toLocaleLowerCase();
                     action.operationId = p; // TODO not handled is 'alias', add as a vendor extension if necessary
                     action.description = (op.documentation ? clean(op.documentation) : '');
                     if (op.documentationUrl) {
@@ -789,8 +825,6 @@ module.exports = {
                     action.responses[error.error ? error.error.httpStatusCode : defStatus++] = failure; //TODO fake statuses created. Map to combined output schema with a 'oneOf'?
                 }
 
-                path[actionName] = action;
-
                 var url = op.http.requestUri;
 
                 url = url.replace(/(\{.+?\})/g,function(match,group1){ // store multiple parameters e.g. {key+} for later use. Only seen in s3
@@ -798,7 +832,7 @@ module.exports = {
                     if (result != group1) {
                         var multiple = {};
                         multiple.url = '';
-                        multiple.action = actionName;
+                        multiple.action = method;
                         multiple.param = result.replace('{','').replace('}','');
                         multiParams.push(multiple);
                     }
@@ -811,7 +845,6 @@ module.exports = {
 
                 if (url.indexOf('?')>=0) {
                     let hparams = url.split('?')[1].split('&');
-                    if (!path.parameters) path.parameters = [];
                     for (let p of hparams) {
                         let param = {};
                         param.name = p.split('=')[0];
@@ -843,7 +876,8 @@ module.exports = {
                     // Add any other required query params to the URL fragment too
                     const paramShape = src.shapes[op.input.shape];
                     const requiredQueryParamNames = _.filter(paramShape.members, (member, memberName) =>
-                        member.location === 'querystring' && _.includes(paramShape.required, memberName)
+                        _.includes(['querystring', 'header', 'headers'], member.location) &&
+                        _.includes(paramShape.required, memberName)
                     ).map((param) => param.locationName);
 
                     if (requiredQueryParamNames.length > 0) {
@@ -891,43 +925,31 @@ module.exports = {
                         throw new Error('Unknown protocol: ' + src.metadata.protocol);
                 }
 
-                var attached = false;
+                // Confirm this URL + method don't conflict with any others
                 if (s.paths[url]) {
-                    if (s.paths[url][actionName]) {
-                        // Add an extra op-name param just to differentiate the path
-                        url += (url.indexOf('#') > -1 ? '&' : '#') + op.name;
-                    } else {
-                        s.paths[url][actionName] = action;
-                        attached = true;
-                    }
-                }
-                if (!attached) {
-                    s.paths[url] = path; // path contains action
-                    if (sigV4Headers) {
-                        s.paths[url].parameters = [];
-                        for (var h in v4Params) {
-                            var param = {};
-                            param["$ref"] = '#/parameters/'+v4Params[h];
-                            s.paths[url].parameters.push(param);
-                        }
-                    }
-                    else if (sigS3Headers) {
-                        s.paths[url].parameters = [];
-                        for (var h in s3Headers) {
-                            var param = {};
-                            param["$ref"] = '#/parameters/'+s3Headers[h];
-                            s.paths[url].parameters.push(param);
-                        }
-                    }
-                    else if (sigV2Params) {
-                        s.paths[url].parameters = [];
-                        for (var p in v2Params) {
-                            var param = {};
-                            param["$ref"] = '#/parameters/'+v2Params[p];
-                            s.paths[url].parameters.push(param);
+                    const conflictingAction = s.paths[url][method];
+                    if (conflictingAction) {
+                        const deprecatedUrl = url + (url.indexOf('#') > -1 ? '&' : '#') + 'deprecated';
+
+                        if (conflictingAction.deprecated) {
+                            // We're a new version of a deprecated action. Move the deprecated version,
+                            // and we'll overwrite the existing action when we're attached below.
+                            if (s.paths[deprecatedUrl] && s.paths[deprecatedUrl][method]) {
+                                throw new Error('Multiple deprecated methods for ' + url);
+                            } else {
+                                attachOperation(s.paths, deprecatedUrl, method, conflictingAction, signatureVersion);
+                            }
+                        } else if (action.deprecated) {
+                            // We're the deprecated version of a replaced action. Move ourselves elsewhere.
+                            url = deprecatedUrl;
+                        } else {
+                            throw new Error('Two conflicting actions, neither deprecated: ' +
+                                action.operationId + ' and ' + conflictingAction.operationId);
                         }
                     }
                 }
+
+                attachOperation(s.paths, url, method, action, signatureVersion);
             }
 
             for (var d in src.shapes) {
