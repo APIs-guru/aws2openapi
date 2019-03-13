@@ -734,7 +734,9 @@ module.exports = {
                     action.operationId = p; // TODO not handled is 'alias', add as a vendor extension if necessary
                     action.description = (op.documentation ? clean(op.documentation) : '');
                     if (op.documentationUrl) {
-                        action.description += '<p>'+op.documentationUrl+'</p>';
+                        action.externalDocs = {
+                            url: op.documentationUrl
+                        };
                     }
                     action.responses = {};
                     var success = {};
