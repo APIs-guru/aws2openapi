@@ -65,35 +65,7 @@ function checkDef(openapi,name) {
     }
 }
 
-function findLocationsForShape(openapi,shape,shapeName){
-    var result = [];
-    for (var p in openapi.paths) {
-        var path = openapi.paths[p];
-        for (var a of actions){
-            var action = path[actions[a]];
-            if (action) {
-                var ok = false;
-                for (var p in action.parameters) {
-                    // TODO not all the parameters may be there yet
-                    var param = action.parameters[p];
-                    if (p["in"] == 'body') {
-                        var ref = p.schema["$ref"];
-                        if (ref == '#/definitions/'+shapeName) ok = true;
-                    }
-                }
-                if (ok) {
-                    var location = {};
-                    location.url = p;
-                    location.action = action;
-                    result.push(location);
-                }
-            }
-        }
-    }
-    return result;
-}
-
-function findResponsesForShape(openapi,shape,shapeName){
+function findResponsesForShape(openapi,shapeName){
     var result = [];
     for (var p in openapi.paths) {
         var path = openapi.paths[p];
@@ -114,40 +86,8 @@ function findResponsesForShape(openapi,shape,shapeName){
     }
 }
 
-function findLocationsForParameter(openapi,parameter){
-    var result = [];
-    for (var p in openapi.paths) {
-        var path = openapi.paths[p];
-        if (p.indexOf('{'+parameter.locationName+'}')>=0) {
-            for (var a of actions) {
-                if (path[actions[a]]) {
-                    var location = {};
-                    location.url = p;
-                    location.verb = actions[a]
-                    location.action = path[actions[a]];
-                    result.push(location);
-                }
-            }
-        }
-    }
-    return result;
-}
-
-function attachHeader(openapi,shape,shapeName,header,required){
-    var locations = findLocationsForShape(openapi,shape,shapeName);
-    for (var l in locations) {
-        var action = locations[l].action;
-        if (!action.parameters) {
-            action.parameters = [];
-        }
-        var param = {};
-        param.name = header.locationName;
-        param["in"] = 'header';
-        param.type = 'string';
-        if (required) param.required = true;
-        action.parameters.push(param); // we uniq them later
-    }
-    var responses = findResponsesForShape(openapi,shape,shapeName);
+function attachHeader(openapi,shapeName,header){
+    var responses = findResponsesForShape(openapi,shapeName);
     for (var r in responses) {
         var response = responses[r];
         if (!response.header) {
@@ -155,38 +95,8 @@ function attachHeader(openapi,shape,shapeName,header,required){
         }
         var header = {};
         header.description = '';
-        param.type = 'string';
+        header.type = 'string';
         response.headers[header.locationName] = header;
-    }
-}
-
-function attachParameter(openapi,shape,parameter,required,location){
-    var locations = findLocationsForParameter(openapi,parameter);
-    for (var l in locations) {
-        var action = locations[l].action;
-        if (!action.parameters) {
-            action.parameters = [];
-        }
-        var param = {};
-        param.name = parameter.locationName;
-        param["in"] = (location == 'querystring' ? 'query' : 'path');
-        param.type = 'string'; // TODO de-reference shape we might not yet have transformed, but string is a good default
-        if (required) param.required = true;
-
-        if (param["in"] == 'path') {
-            for (var m in multiParams) {
-                var multiple = multiParams[m];
-                if ((param.type != 'array') && (multiple.url == locations[l].url) && (multiple.param == param.name) &&
-                    (multiple.action == locations[l].verb)) {
-                    param.items = {};
-                    param.items.type = param.type; // TODO move format etc into the items structure if necessary. Only seen in s3
-                    param.type = 'array';
-                    param.collectionFormat = 'csv'; // TODO validate this
-                }
-            }
-        }
-
-        action.parameters.push(param); // we uniq them later
     }
 }
 
@@ -223,6 +133,7 @@ function convertRegex(pattern) {
 }
 
 function transformShape(openapi,shape){
+    shape = _.cloneDeep(shape);
 
     if (shape.type == 'structure') shape.type = 'object';
     if (shape.type == 'float') {
@@ -300,18 +211,15 @@ function transformShape(openapi,shape){
     }
 
     if (shape.type == 'map') {
-        rename(shape,'min','minItems');
-        rename(shape,'max','maxItems');
-        // create map 'shape', array of key:value object. Doing it inline means we don't need to name it
-        shape.type = 'array';
-        shape.items = {};
-        shape.items.type = 'object';
-        shape.items.properties = {};
-        shape.items.properties.key = {};
-        shape.items.properties.key["$ref"] = '#/definitions/'+shape.key.shape;
-        checkDef(openapi,shape.key.shape);
-        shape.items.properties.value = {};
-        shape.items.properties.value["$ref"] = '#/definitions/'+shape.value.shape;
+        rename(shape,'min','minProperties');
+        rename(shape,'max','maxProperties');
+        shape.type = 'object';
+        shape.additionalProperties = {
+            '$ref': '#/definitions/'+shape.value.shape
+        };
+        // In OpenAPI 3, we could use propertyNames/Patterns here, and use the shape.key.shape to
+        // only allow valid keys. For now we allow any string.
+
         checkDef(openapi,shape.value.shape);
         delete shape.key;
         delete shape.value;
@@ -368,25 +276,19 @@ function transformShape(openapi,shape){
                 if (required.length<=0) delete shape.required;
             }
 
-            // we now need to know which operation (or response?) is referencing this shape
+            // we now need to know which response is referencing this shape
             var shapeName = state.pkey;
-            attachHeader(openapi,shape,shapeName,newHeader,index>=0);
+            attachHeader(openapi,shapeName,newHeader);
 
             delete state.parent[state.pkey];
         }
         if ((key == 'location') && ((obj[key] == 'uri') || (obj[key] == 'querystring'))) {
-            var param = state.parent[state.pkey];
-            var newParam = _.cloneDeep(param);
-
             var required = shape.required;
             var index = (required ? required.indexOf(state.pkey) : -1);
             if (index>=0) { // should always be true
                 required.splice(index,1);
                 if (required.length<=0) delete shape.required;
             }
-
-            // we now need to know which operation (or response?) is referencing this shape
-            attachParameter(openapi,shape,newParam,index>=0,param.location);
 
             delete state.parent[state.pkey];
         }
@@ -522,6 +424,185 @@ function fillInMissingPathParameters(openapi) {
 function patches(openapi) {
     if (openapi.info["x-serviceName"] === 'data.mediastore') {
         delete openapi.definitions.GetObjectResponse.required;
+    }
+}
+
+function attachParameters(openapi, src, op, action, options) {
+    if (op.input && op.input.shape) {
+        // Build parameters details for these params, according to the
+        // standard approach for each protocol.
+        const paramShape = src.shapes[op.input.shape];
+
+        switch (src.metadata.protocol) {
+            case 'rest-xml':
+            case 'rest-json':
+                // Querystring/URI/header/headers are sent as params for the corresponding type
+                // Anything else is a body param
+
+                const [queryParams, bodyParams] = _.partition(
+                    _.map(paramShape.members, (member, memberName) => _.omitBy({
+                        in: {
+                            'header': 'header',
+                            'uri': 'path',
+                            'querystring': 'query'
+                        }[member.location],
+                        name: member.locationName || memberName,
+                        required: _.includes(paramShape.required, memberName),
+                        description: clean(member.documentation || ''),
+                        ...(src.shapes[member.shape] ?
+                            transformShape(openapi, src.shapes[member.shape]) : {}
+                        )
+                    }, _.isUndefined)),
+                    (param) => !!param.in
+                );
+
+                action.parameters = queryParams;
+
+                if (bodyParams.length) {
+                    const bodyParam = {
+                        in: 'body',
+                        name: 'body',
+                        required: true,
+                        schema: {
+                            type: 'object',
+                            required: bodyParams
+                                .filter(p => p.required)
+                                .map(p => p.name),
+                            properties: _.mapValues(
+                                _.keyBy(bodyParams, 'name'),
+                                (param) => _.omit(param, ['name', 'required'])
+                            )
+                        }
+                    };
+
+                    if (bodyParam.schema.required.length === 0) {
+                        delete bodyParam.schema.required;
+                    }
+
+                    action.parameters.push(bodyParam);
+                }
+                break;
+
+            case 'query':
+            case 'ec2':
+                // Serialises all params into a query string
+                action.parameters = _.map(paramShape.members, (member, name) => _.omitBy({
+                    in: 'query',
+                    name: member.locationName || name,
+                    required: _.includes(paramShape.required, name),
+                    description: clean(member.documentation || ''),
+                    ...(src.shapes[member.shape] ?
+                        transformShape(openapi, src.shapes[member.shape]) : {}
+                    )
+                }, _.isUndefined));
+                break;
+
+            case 'json':
+                // All params are sent as a JSON object in the body
+                const param = {
+                    name: 'body',
+                    in: 'body',
+                    required: true,
+                    schema: { '$ref': '#/definitions/' + op.input.shape }
+                };
+                checkDef(openapi,op.input.shape);
+                action.parameters = [param];
+                break;
+
+            default:
+                throw new Error('Unknown protocol: ' + src.metadata.protocol);
+        }
+
+        action.parameters = _.flatMap(action.parameters, (param) => {
+            // Any list parameters need to be filtered to just param-valid properties
+            // Any object query params need to be converted into their flattened forms
+
+            if (param.in !== 'query') {
+                return param;
+            }
+
+            if (param.additionalProperties) {
+                // A 'map' (in AWS terms)
+
+                // These effectively allow wildcard parameters. We can't represent this properly
+                // until OpenAPI 3, but in the short term we can enumerate N examples
+                return _.flatMap(_.range(param.maxProperties || 3), (i) => [{
+                    in: 'query',
+                    type: 'string',
+                    name: param.name + '.' + i + '.' + 'key'
+                }, {
+                    type: 'string', // Not accurate, but enough for now
+                    in: 'query',
+                    name: param.name + '.' + i + '.' + 'value'
+                }]);
+            } else if (param.type === 'object') {
+                // A 'structure' (in AWS terms). This is a defined set of properties.
+                // We don't deal with subobjects here, but we may need to in future.
+                return _.map(param.properties, (subParam, subParamName) => {
+                    const subParamShape = subParam.$ref ?
+                        transformShape(openapi,
+                            // Go from $ref back to shape name (this is a bit nasty).
+                            src.shapes[subParam.$ref.split('/').slice(-1)[0]]
+                        ) : {};
+                    const type = subParam.type || subParamShape.type;
+
+                    return _.omitBy({
+                        // Simplify to stringy params. Not accurate, but enough for now:
+                        type: type === 'array' ? 'array' : 'string',
+                        items: type === 'array' ? { type: 'string' } : undefined,
+
+                        description: [param.description, subParam.description].join('\n'),
+                        required: subParam.required,
+                        in: 'query',
+                        name: param.name + '.' + subParamName
+                    }, _.isUndefined)
+                })
+            } else if (param.type === 'array') {
+                return {
+                    type: 'array',
+                    name: param.name,
+                    required: param.required,
+                    in: 'query',
+                    description: param.description,
+                    items: { type: 'string' } // Not accurate, but enough for now
+                };
+            } else {
+                return param;
+            }
+        });
+    }
+
+    if (options.paginators && options.paginators.pagination[action.operationId]) {
+        var pag = options.paginators.pagination[action.operationId];
+        if (pag.limit_key && !_.some(action.parameters, { name: pag.limit_key })) {
+            var param = {};
+            param.name = pag.limit_key;
+            param.type = 'string';
+            param["in"] = 'query';
+            param.description = 'Pagination limit';
+            param.required = false;
+            if (!action.parameters) {
+                action.parameters = [];
+            }
+            action.parameters.push(param);
+        }
+        if (pag.input_token && !_.some(action.parameters, { name: pag.input_token })) {
+            if (!Array.isArray(pag.input_token)) {
+                pag.input_token = [pag.input_token]; //it usually isn't...
+            }
+            for (var t in pag.input_token) {
+                var param = {};
+                param.name = pag.input_token[t];
+                param.type = 'string';
+                param["in"] = 'query';
+                param.description = 'Pagination token';
+                param.required = false;
+                if (!action.parameters) {
+                    action.parameters = [];
+                }
+                action.parameters.push(param);
+            }
+        }
     }
 }
 
@@ -758,62 +839,7 @@ module.exports = {
                     action.responses[op.http.responseCode ? op.http.responseCode : 200] = success;
                 }
 
-                if (op.input && op.input.shape) {
-                    var param = {};
-                    param.name = 'body';
-                    param["in"] = 'body';
-                    param.required = true;
-                    param.schema = {};
-                    param.schema["$ref"] = '#/definitions/'+op.input.shape;
-                    checkDef(s,op.input.shape);
-                    if (!action.parameters) {
-                        action.parameters = [];
-                    }
-                    action.parameters.push(param);
-
-                    if (options.examples && options.examples.examples[p]) {
-                        for (var e in options.examples.examples[p]) {
-                            var example = options.examples.examples[p][e];
-                            if (example.input) {
-                                src.shapes[op.input.shape].example = example.input;
-                            }
-                        }
-                    }
-
-                }
-
-                if (options.paginators && options.paginators.pagination[p]) {
-                    var pag = options.paginators.pagination[p];
-                    if (pag.limit_key) {
-                        var param = {};
-                        param.name = pag.limit_key;
-                        param.type = 'string';
-                        param["in"] = 'query';
-                        param.description = 'Pagination limit';
-                        param.required = false;
-                        if (!action.parameters) {
-                            action.parameters = [];
-                        }
-                        action.parameters.push(param);
-                    }
-                    if (pag.input_token) {
-                        if (!Array.isArray(pag.input_token)) {
-                            pag.input_token = [pag.input_token]; //it usually isn't...
-                        }
-                        for (var t in pag.input_token) {
-                            var param = {};
-                            param.name = pag.input_token[t];
-                            param.type = 'string';
-                            param["in"] = 'query';
-                            param.description = 'Pagination token';
-                            param.required = false;
-                            if (!action.parameters) {
-                                action.parameters = [];
-                            }
-                            action.parameters.push(param);
-                        }
-                    }
-                }
+                attachParameters(s, src, op, action, options);
 
                 var defStatus = 480;
                 for (var e in op.errors) {
@@ -927,7 +953,7 @@ module.exports = {
                         throw new Error('Unknown protocol: ' + src.metadata.protocol);
                 }
 
-                // Confirm this URL + method don't conflict with any others
+                // Before adding the operation, we need to confirm the URL+method don't conflict
                 if (s.paths[url]) {
                     const conflictingAction = s.paths[url][method];
                     if (conflictingAction) {
