@@ -957,7 +957,7 @@ module.exports = {
                 if (s.paths[url]) {
                     const conflictingAction = s.paths[url][method];
                     if (conflictingAction) {
-                        const deprecatedUrl = url + (url.indexOf('#') > -1 ? '&' : '#') + 'deprecated';
+                        const deprecatedUrl = url + (url.indexOf('#') > -1 ? '&' : '#') + 'deprecated!';
 
                         if (conflictingAction.deprecated) {
                             // We're a new version of a deprecated action. Move the deprecated version,
