@@ -779,20 +779,20 @@ module.exports = {
             sec.hmac = [];
             s.security.push(sec);
 
-            var protocol = src.metadata.protocol;
+            const protocol = src.metadata.protocol;
 
-            if ((protocol == 'query') && (src.metadata.xmlNamespace)) {
-                protocol = 'xml';
-            }
-            if ((protocol == 'query') && (src.metadata.jsonVersion)) {
-                protocol = 'json';
-            }
-
-            if ((protocol == 'rest-json') || (protocol == 'json')) {
+            if (
+                protocol == 'rest-json' ||
+                protocol == 'json' ||
+                (protocol == 'query' && src.metadata.jsonVersion)
+            ) {
                 s.consumes.push('application/json');
                 s.produces.push('application/json');
             }
-            if (protocol == 'rest-xml') {
+            if (
+                protocol == 'rest-xml' ||
+                (protocol == 'query' && src.metadata.xmlNamespace)
+            ) {
                 s.consumes.push('text/xml');
                 s.produces.push('text/xml');
             }
@@ -915,7 +915,7 @@ module.exports = {
 
                 // Work out a unique path identifier sufficient to look up the relevant
                 // path given a full request, for routing etc.
-                switch (src.metadata.protocol) {
+                switch (protocol) {
                     case 'rest-xml':
                     case 'rest-json':
                         // Identified by specific requestUri params.
@@ -950,7 +950,7 @@ module.exports = {
                         break;
 
                     default:
-                        throw new Error('Unknown protocol: ' + src.metadata.protocol);
+                        throw new Error('Unknown protocol: ' + protocol);
                 }
 
                 // Before adding the operation, we need to confirm the URL+method don't conflict
