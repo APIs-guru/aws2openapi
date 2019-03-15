@@ -571,10 +571,15 @@ module.exports = {
             if (prefEntry) preferred = (prefEntry.preferred == src.metadata.apiVersion);
             s.info['x-preferred'] = preferred;
 
-            s.externalDocs = {};
-            s.externalDocs.description = 'Amazon Web Services documentation';
             var epp = src.metadata.endpointPrefix.split('.');
-            s.externalDocs.url = 'https://aws.amazon.com/'+epp[epp.length-1]+'/';
+
+            s.externalDocs = {
+                description: 'Amazon Web Services documentation',
+                // This is a best guess. Mostly correct, but not always.
+                // In future, it might be good to test it for 404s, and try
+                // some other possible URL formats too as a backup.
+                url: 'https://docs.aws.amazon.com/'+epp[epp.length-1]+'/'
+            };
             s.host = src.metadata.endpointPrefix+'.amazonaws.com';
             s.basePath = '/';
             s['x-hasEquivalentPaths'] = false; // may get removed later
