@@ -803,9 +803,9 @@ module.exports = {
             for (var p in src.operations) {
                 var op = src.operations[p];
 
-                var action = {
-                    deprecated: !!op.deprecated
-                };
+                var action = { };
+
+                if (op.deprecated) action.deprecated = true;
 
                 if (op.http) {
                     if (s.schemes.indexOf('http')<0) {
