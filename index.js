@@ -441,12 +441,12 @@ function attachParameters(openapi, src, op, action, options) {
 
                 const [queryParams, bodyParams] = _.partition(
                     _.map(paramShape.members, (member, memberName) => _.omitBy({
+                        name: member.locationName || memberName,
                         in: {
                             'header': 'header',
                             'uri': 'path',
                             'querystring': 'query'
                         }[member.location],
-                        name: member.locationName || memberName,
                         required: _.includes(paramShape.required, memberName),
                         description: clean(member.documentation || ''),
                         ...(src.shapes[member.shape] ?
@@ -460,8 +460,8 @@ function attachParameters(openapi, src, op, action, options) {
 
                 if (bodyParams.length) {
                     const bodyParam = {
-                        in: 'body',
                         name: 'body',
+                        in: 'body',
                         required: true,
                         schema: {
                             type: 'object',
@@ -487,8 +487,8 @@ function attachParameters(openapi, src, op, action, options) {
             case 'ec2':
                 // Serialises all params into a query string
                 action.parameters = _.map(paramShape.members, (member, name) => _.omitBy({
-                    in: 'query',
                     name: member.locationName || name,
+                    in: 'query',
                     required: _.includes(paramShape.required, name),
                     description: clean(member.documentation || ''),
                     ...(src.shapes[member.shape] ?
@@ -527,13 +527,13 @@ function attachParameters(openapi, src, op, action, options) {
                 // These effectively allow wildcard parameters. We can't represent this properly
                 // until OpenAPI 3, but in the short term we can enumerate N examples
                 return _.flatMap(_.range(param.maxProperties || 3), (i) => [{
+                    name: param.name + '.' + i + '.' + 'key',
                     in: 'query',
-                    type: 'string',
-                    name: param.name + '.' + i + '.' + 'key'
+                    type: 'string'
                 }, {
-                    type: 'string', // Not accurate, but enough for now
+                    name: param.name + '.' + i + '.' + 'value',
                     in: 'query',
-                    name: param.name + '.' + i + '.' + 'value'
+                    type: 'string' // Not accurate, but enough for now
                 }]);
             } else if (param.type === 'object') {
                 // A 'structure' (in AWS terms). This is a defined set of properties.
@@ -547,23 +547,23 @@ function attachParameters(openapi, src, op, action, options) {
                     const type = subParam.type || subParamShape.type;
 
                     return _.omitBy({
+                        name: param.name + '.' + subParamName,
+                        in: 'query',
+                        required: subParam.required,
+                        description: [param.description, subParam.description].join('\n'),
+
                         // Simplify to stringy params. Not accurate, but enough for now:
                         type: type === 'array' ? 'array' : 'string',
                         items: type === 'array' ? { type: 'string' } : undefined,
-
-                        description: [param.description, subParam.description].join('\n'),
-                        required: subParam.required,
-                        in: 'query',
-                        name: param.name + '.' + subParamName
                     }, _.isUndefined)
                 })
             } else if (param.type === 'array') {
                 return {
-                    type: 'array',
                     name: param.name,
-                    required: param.required,
                     in: 'query',
+                    required: param.required,
                     description: param.description,
+                    type: 'array',
                     items: { type: 'string' } // Not accurate, but enough for now
                 };
             } else {
