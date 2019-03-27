@@ -65,35 +65,7 @@ function checkDef(openapi,name) {
     }
 }
 
-function findLocationsForShape(openapi,shape,shapeName){
-    var result = [];
-    for (var p in openapi.paths) {
-        var path = openapi.paths[p];
-        for (var a of actions){
-            var action = path[actions[a]];
-            if (action) {
-                var ok = false;
-                for (var p in action.parameters) {
-                    // TODO not all the parameters may be there yet
-                    var param = action.parameters[p];
-                    if (p["in"] == 'body') {
-                        var ref = p.schema["$ref"];
-                        if (ref == '#/definitions/'+shapeName) ok = true;
-                    }
-                }
-                if (ok) {
-                    var location = {};
-                    location.url = p;
-                    location.action = action;
-                    result.push(location);
-                }
-            }
-        }
-    }
-    return result;
-}
-
-function findResponsesForShape(openapi,shape,shapeName){
+function findResponsesForShape(openapi,shapeName){
     var result = [];
     for (var p in openapi.paths) {
         var path = openapi.paths[p];
@@ -114,40 +86,8 @@ function findResponsesForShape(openapi,shape,shapeName){
     }
 }
 
-function findLocationsForParameter(openapi,parameter){
-    var result = [];
-    for (var p in openapi.paths) {
-        var path = openapi.paths[p];
-        if (p.indexOf('{'+parameter.locationName+'}')>=0) {
-            for (var a of actions) {
-                if (path[actions[a]]) {
-                    var location = {};
-                    location.url = p;
-                    location.verb = actions[a]
-                    location.action = path[actions[a]];
-                    result.push(location);
-                }
-            }
-        }
-    }
-    return result;
-}
-
-function attachHeader(openapi,shape,shapeName,header,required){
-    var locations = findLocationsForShape(openapi,shape,shapeName);
-    for (var l in locations) {
-        var action = locations[l].action;
-        if (!action.parameters) {
-            action.parameters = [];
-        }
-        var param = {};
-        param.name = header.locationName;
-        param["in"] = 'header';
-        param.type = 'string';
-        if (required) param.required = true;
-        action.parameters.push(param); // we uniq them later
-    }
-    var responses = findResponsesForShape(openapi,shape,shapeName);
+function attachHeader(openapi,shapeName,header){
+    var responses = findResponsesForShape(openapi,shapeName);
     for (var r in responses) {
         var response = responses[r];
         if (!response.header) {
@@ -155,38 +95,8 @@ function attachHeader(openapi,shape,shapeName,header,required){
         }
         var header = {};
         header.description = '';
-        param.type = 'string';
+        header.type = 'string';
         response.headers[header.locationName] = header;
-    }
-}
-
-function attachParameter(openapi,shape,parameter,required,location){
-    var locations = findLocationsForParameter(openapi,parameter);
-    for (var l in locations) {
-        var action = locations[l].action;
-        if (!action.parameters) {
-            action.parameters = [];
-        }
-        var param = {};
-        param.name = parameter.locationName;
-        param["in"] = (location == 'querystring' ? 'query' : 'path');
-        param.type = 'string'; // TODO de-reference shape we might not yet have transformed, but string is a good default
-        if (required) param.required = true;
-
-        if (param["in"] == 'path') {
-            for (var m in multiParams) {
-                var multiple = multiParams[m];
-                if ((param.type != 'array') && (multiple.url == locations[l].url) && (multiple.param == param.name) &&
-                    (multiple.action == locations[l].verb)) {
-                    param.items = {};
-                    param.items.type = param.type; // TODO move format etc into the items structure if necessary. Only seen in s3
-                    param.type = 'array';
-                    param.collectionFormat = 'csv'; // TODO validate this
-                }
-            }
-        }
-
-        action.parameters.push(param); // we uniq them later
     }
 }
 
@@ -223,6 +133,7 @@ function convertRegex(pattern) {
 }
 
 function transformShape(openapi,shape){
+    shape = _.cloneDeep(shape);
 
     if (shape.type == 'structure') shape.type = 'object';
     if (shape.type == 'float') {
@@ -300,18 +211,15 @@ function transformShape(openapi,shape){
     }
 
     if (shape.type == 'map') {
-        rename(shape,'min','minItems');
-        rename(shape,'max','maxItems');
-        // create map 'shape', array of key:value object. Doing it inline means we don't need to name it
-        shape.type = 'array';
-        shape.items = {};
-        shape.items.type = 'object';
-        shape.items.properties = {};
-        shape.items.properties.key = {};
-        shape.items.properties.key["$ref"] = '#/definitions/'+shape.key.shape;
-        checkDef(openapi,shape.key.shape);
-        shape.items.properties.value = {};
-        shape.items.properties.value["$ref"] = '#/definitions/'+shape.value.shape;
+        rename(shape,'min','minProperties');
+        rename(shape,'max','maxProperties');
+        shape.type = 'object';
+        shape.additionalProperties = {
+            '$ref': '#/definitions/'+shape.value.shape
+        };
+        // In OpenAPI 3, we could use propertyNames/Patterns here, and use the shape.key.shape to
+        // only allow valid keys. For now we allow any string.
+
         checkDef(openapi,shape.value.shape);
         delete shape.key;
         delete shape.value;
@@ -368,25 +276,19 @@ function transformShape(openapi,shape){
                 if (required.length<=0) delete shape.required;
             }
 
-            // we now need to know which operation (or response?) is referencing this shape
+            // we now need to know which response is referencing this shape
             var shapeName = state.pkey;
-            attachHeader(openapi,shape,shapeName,newHeader,index>=0);
+            attachHeader(openapi,shapeName,newHeader);
 
             delete state.parent[state.pkey];
         }
         if ((key == 'location') && ((obj[key] == 'uri') || (obj[key] == 'querystring'))) {
-            var param = state.parent[state.pkey];
-            var newParam = _.cloneDeep(param);
-
             var required = shape.required;
             var index = (required ? required.indexOf(state.pkey) : -1);
             if (index>=0) { // should always be true
                 required.splice(index,1);
                 if (required.length<=0) delete shape.required;
             }
-
-            // we now need to know which operation (or response?) is referencing this shape
-            attachParameter(openapi,shape,newParam,index>=0,param.location);
 
             delete state.parent[state.pkey];
         }
@@ -483,9 +385,9 @@ function postProcess(openapi,options){
 }
 
 function deparameterisePath(s){
-    const regex = /(\{.+?\})/g;
-    s = s.replace(regex,'{param}');
-    return s;
+    return s
+        .replace(/(\{.+?\})/g,'{param}')
+        .replace(/#.*/, '');
 }
 
 function doit(methodUri,op,pi) {
@@ -522,6 +424,221 @@ function fillInMissingPathParameters(openapi) {
 function patches(openapi) {
     if (openapi.info["x-serviceName"] === 'data.mediastore') {
         delete openapi.definitions.GetObjectResponse.required;
+    }
+}
+
+function attachParameters(openapi, src, op, action, options) {
+    if (op.input && op.input.shape) {
+        // Build parameters details for these params, according to the
+        // standard approach for each protocol.
+        const paramShape = src.shapes[op.input.shape];
+
+        switch (src.metadata.protocol) {
+            case 'rest-xml':
+            case 'rest-json':
+                // Querystring/URI/header/headers are sent as params for the corresponding type
+                // Anything else is a body param
+
+                const [queryParams, bodyParams] = _.partition(
+                    _.map(paramShape.members, (member, memberName) => _.omitBy({
+                        name: member.locationName || memberName,
+                        in: {
+                            'header': 'header',
+                            'uri': 'path',
+                            'querystring': 'query'
+                        }[member.location],
+                        required: _.includes(paramShape.required, memberName),
+                        description: clean(member.documentation || ''),
+                        ...(src.shapes[member.shape] ?
+                            transformShape(openapi, src.shapes[member.shape]) : {}
+                        )
+                    }, _.isUndefined)),
+                    (param) => !!param.in
+                );
+
+                action.parameters = queryParams;
+
+                if (bodyParams.length) {
+                    const bodyParam = {
+                        name: 'body',
+                        in: 'body',
+                        required: true,
+                        schema: {
+                            type: 'object',
+                            required: bodyParams
+                                .filter(p => p.required)
+                                .map(p => p.name),
+                            properties: _.mapValues(
+                                _.keyBy(bodyParams, 'name'),
+                                (param) => _.omit(param, ['name', 'required'])
+                            )
+                        }
+                    };
+
+                    if (bodyParam.schema.required.length === 0) {
+                        delete bodyParam.schema.required;
+                    }
+
+                    action.parameters.push(bodyParam);
+                }
+                break;
+
+            case 'query':
+            case 'ec2':
+                // Serialises all params into a query string
+                action.parameters = _.map(paramShape.members, (member, name) => _.omitBy({
+                    name: member.locationName || name,
+                    in: 'query',
+                    required: _.includes(paramShape.required, name),
+                    description: clean(member.documentation || ''),
+                    ...(src.shapes[member.shape] ?
+                        transformShape(openapi, src.shapes[member.shape]) : {}
+                    )
+                }, _.isUndefined));
+                break;
+
+            case 'json':
+                // All params are sent as a JSON object in the body
+                const param = {
+                    name: 'body',
+                    in: 'body',
+                    required: true,
+                    schema: { '$ref': '#/definitions/' + op.input.shape }
+                };
+                checkDef(openapi,op.input.shape);
+                action.parameters = [param];
+                break;
+
+            default:
+                throw new Error('Unknown protocol: ' + src.metadata.protocol);
+        }
+
+        action.parameters = _.flatMap(action.parameters, (param) => {
+            // Any list parameters need to be filtered to just param-valid properties
+            // Any object query params need to be converted into their flattened forms
+
+            if (param.in !== 'query') {
+                return param;
+            }
+
+            if (param.additionalProperties) {
+                // A 'map' (in AWS terms)
+
+                // These effectively allow wildcard parameters. We can't represent this properly
+                // until OpenAPI 3, but in the short term we can enumerate N examples
+                return _.flatMap(_.range(param.maxProperties || 3), (i) => [{
+                    name: param.name + '.' + i + '.' + 'key',
+                    in: 'query',
+                    type: 'string'
+                }, {
+                    name: param.name + '.' + i + '.' + 'value',
+                    in: 'query',
+                    type: 'string' // Not accurate, but enough for now
+                }]);
+            } else if (param.type === 'object') {
+                // A 'structure' (in AWS terms). This is a defined set of properties.
+                // We don't deal with subobjects here, but we may need to in future.
+                return _.map(param.properties, (subParam, subParamName) => {
+                    const subParamShape = subParam.$ref ?
+                        transformShape(openapi,
+                            // Go from $ref back to shape name (this is a bit nasty).
+                            src.shapes[subParam.$ref.split('/').slice(-1)[0]]
+                        ) : {};
+                    const type = subParam.type || subParamShape.type;
+
+                    return _.omitBy({
+                        name: param.name + '.' + subParamName,
+                        in: 'query',
+                        required: subParam.required,
+                        description: [param.description, subParam.description].join('\n'),
+
+                        // Simplify to stringy params. Not accurate, but enough for now:
+                        type: type === 'array' ? 'array' : 'string',
+                        items: type === 'array' ? { type: 'string' } : undefined,
+                    }, _.isUndefined)
+                })
+            } else if (param.type === 'array') {
+                return {
+                    name: param.name,
+                    in: 'query',
+                    required: param.required,
+                    description: param.description,
+                    type: 'array',
+                    items: { type: 'string' } // Not accurate, but enough for now
+                };
+            } else {
+                return param;
+            }
+        });
+    }
+
+    if (options.paginators && options.paginators.pagination[action.operationId]) {
+        var pag = options.paginators.pagination[action.operationId];
+        if (pag.limit_key && !_.some(action.parameters, { name: pag.limit_key })) {
+            var param = {};
+            param.name = pag.limit_key;
+            param.type = 'string';
+            param["in"] = 'query';
+            param.description = 'Pagination limit';
+            param.required = false;
+            if (!action.parameters) {
+                action.parameters = [];
+            }
+            action.parameters.push(param);
+        }
+        if (pag.input_token && !_.some(action.parameters, { name: pag.input_token })) {
+            if (!Array.isArray(pag.input_token)) {
+                pag.input_token = [pag.input_token]; //it usually isn't...
+            }
+            for (var t in pag.input_token) {
+                var param = {};
+                param.name = pag.input_token[t];
+                param.type = 'string';
+                param["in"] = 'query';
+                param.description = 'Pagination token';
+                param.required = false;
+                if (!action.parameters) {
+                    action.parameters = [];
+                }
+                action.parameters.push(param);
+            }
+        }
+    }
+}
+
+// Attach the given action at the given url/verb in a paths object.
+// This assumes there are no conflicts, and will overwrite existing
+// actions, so that should be checked first
+function attachOperation(paths, url, method, action, signatureVersion) {
+    if (paths[url]) {
+        paths[url][method] = action;
+        return;
+    }
+
+    paths[url] = { [method]: action };
+    if (signatureVersion === 4) {
+        paths[url].parameters = [];
+        for (var h in v4Params) {
+            var param = {};
+            param["$ref"] = '#/parameters/'+v4Params[h];
+            paths[url].parameters.push(param);
+        }
+    }
+    else if (signatureVersion === 3) {
+        paths[url].parameters = [];
+        for (var h in s3Headers) {
+            var param = {};
+            param["$ref"] = '#/parameters/'+s3Headers[h];
+            paths[url].parameters.push(param);
+        }
+    }
+    else if (signatureVersion === 2) {
+        paths[url].parameters = [];
+        for (var p in v2Params) {
+            var param = {};
+            param["$ref"] = '#/parameters/'+v2Params[p];
+            paths[url].parameters.push(param);
+        }
     }
 }
 
@@ -595,15 +712,13 @@ module.exports = {
             s.securityDefinitions.hmac.name = 'Authorization';
             s.securityDefinitions.hmac["in"] = 'header';
 
-            var sigV4Headers = false;
-            var sigS3Headers = false;
-            var sigV2Params = false;
+            var signatureVersion = null;
 
             if (src.metadata.signatureVersion) {
                 if ((src.metadata.signatureVersion == 'v4') || (src.metadata.signatureVersion === 's3v4')) {
                     s.securityDefinitions.hmac.description = 'Amazon Signature authorization v4';
                     s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv4';
-                    sigV4Headers = true;
+                    signatureVersion = 4;
 
                     // https://docs.aws.amazon.com/IAM/latest/APIReference/CommonParameters.html
 
@@ -629,7 +744,7 @@ module.exports = {
                 else if (src.metadata.signatureVersion == 's3') {
                     s.securityDefinitions.hmac.description = 'Amazon S3 signature';
                     s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsS3';
-                    sigS3Headers = true;
+                    signatureVersion = 3;
 
                     // https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
 
@@ -646,7 +761,7 @@ module.exports = {
                 else if (src.metadata.signatureVersion == 'v2') {
                     s.securityDefinitions.hmac.description = 'Amazon Signature authorization v2';
                     s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv2';
-                    sigV2Params = true;
+                    signatureVersion = 2;
 
                     // https://docs.aws.amazon.com/general/latest/gr/signature-version-2.html
 
@@ -669,43 +784,45 @@ module.exports = {
             sec.hmac = [];
             s.security.push(sec);
 
-            var protocol = src.metadata.protocol;
+            const protocol = src.metadata.protocol;
 
-            if ((protocol == 'query') && (src.metadata.xmlNamespace)) {
-                protocol = 'xml';
-            }
-            if ((protocol == 'query') && (src.metadata.jsonVersion)) {
-                protocol = 'json';
-            }
-
-            if ((protocol == 'rest-json') || (protocol == 'json')) {
+            if (
+                protocol == 'rest-json' ||
+                protocol == 'json' ||
+                (protocol == 'query' && src.metadata.jsonVersion)
+            ) {
                 s.consumes.push('application/json');
                 s.produces.push('application/json');
             }
-            if (protocol == 'rest-xml') {
+            if (
+                protocol == 'rest-xml' ||
+                (protocol == 'query' && src.metadata.xmlNamespace)
+            ) {
                 s.consumes.push('text/xml');
                 s.produces.push('text/xml');
             }
-            var addFragment = (protocol == 'ec2');
-            var pathCache = {};
 
             s.paths = {};
             s.definitions = {};
 
             for (var p in src.operations) {
                 var op = src.operations[p];
-                var path = {};
 
-                var action = {};
+                var action = { };
+
+                if (op.deprecated) action.deprecated = true;
+
                 if (op.http) {
                     if (s.schemes.indexOf('http')<0) {
                         s.schemes.push('http');
                     }
-                    var actionName = op.http.method.toLocaleLowerCase();
+                    var method = op.http.method.toLocaleLowerCase();
                     action.operationId = p; // TODO not handled is 'alias', add as a vendor extension if necessary
                     action.description = (op.documentation ? clean(op.documentation) : '');
                     if (op.documentationUrl) {
-                        action.description += '<p>'+op.documentationUrl+'</p>';
+                        action.externalDocs = {
+                            url: op.documentationUrl
+                        };
                     }
                     action.responses = {};
                     var success = {};
@@ -727,62 +844,7 @@ module.exports = {
                     action.responses[op.http.responseCode ? op.http.responseCode : 200] = success;
                 }
 
-                if (op.input && op.input.shape) {
-                    var param = {};
-                    param.name = 'body';
-                    param["in"] = 'body';
-                    param.required = true;
-                    param.schema = {};
-                    param.schema["$ref"] = '#/definitions/'+op.input.shape;
-                    checkDef(s,op.input.shape);
-                    if (!action.parameters) {
-                        action.parameters = [];
-                    }
-                    action.parameters.push(param);
-
-                    if (options.examples && options.examples.examples[p]) {
-                        for (var e in options.examples.examples[p]) {
-                            var example = options.examples.examples[p][e];
-                            if (example.input) {
-                                src.shapes[op.input.shape].example = example.input;
-                            }
-                        }
-                    }
-
-                }
-
-                if (options.paginators && options.paginators.pagination[p]) {
-                    var pag = options.paginators.pagination[p];
-                    if (pag.limit_key) {
-                        var param = {};
-                        param.name = pag.limit_key;
-                        param.type = 'string';
-                        param["in"] = 'query';
-                        param.description = 'Pagination limit';
-                        param.required = false;
-                        if (!action.parameters) {
-                            action.parameters = [];
-                        }
-                        action.parameters.push(param);
-                    }
-                    if (pag.input_token) {
-                        if (!Array.isArray(pag.input_token)) {
-                            pag.input_token = [pag.input_token]; //it usually isn't...
-                        }
-                        for (var t in pag.input_token) {
-                            var param = {};
-                            param.name = pag.input_token[t];
-                            param.type = 'string';
-                            param["in"] = 'query';
-                            param.description = 'Pagination token';
-                            param.required = false;
-                            if (!action.parameters) {
-                                action.parameters = [];
-                            }
-                            action.parameters.push(param);
-                        }
-                    }
-                }
+                attachParameters(s, src, op, action, options);
 
                 var defStatus = 480;
                 for (var e in op.errors) {
@@ -796,8 +858,6 @@ module.exports = {
                     action.responses[error.error ? error.error.httpStatusCode : defStatus++] = failure; //TODO fake statuses created. Map to combined output schema with a 'oneOf'?
                 }
 
-                path[actionName] = action;
-
                 var url = op.http.requestUri;
 
                 url = url.replace(/(\{.+?\})/g,function(match,group1){ // store multiple parameters e.g. {key+} for later use. Only seen in s3
@@ -805,7 +865,7 @@ module.exports = {
                     if (result != group1) {
                         var multiple = {};
                         multiple.url = '';
-                        multiple.action = actionName;
+                        multiple.action = method;
                         multiple.param = result.replace('{','').replace('}','');
                         multiParams.push(multiple);
                     }
@@ -818,70 +878,111 @@ module.exports = {
 
                 if (url.indexOf('?')>=0) {
                     let hparams = url.split('?')[1].split('&');
-                    if (!path.parameters) path.parameters = [];
                     for (let p of hparams) {
                         let param = {};
                         param.name = p.split('=')[0];
                         param.in = 'query';
                         param.required = true;
-                        param.type = 'string';
                         let val = p.split('=')[1];
                         if (val) {
+                            param.type = 'string';
                             param.enum = [val];
                         }
-                        else param.allowEmptyValue = true;
+                        else {
+                            // A slightly funky way to describe a empty ONLY value
+                            // that must always be present (with required=true above)
+                            param.type = 'boolean';
+                            param.allowEmptyValue = true;
+                            param.enum = [true];
+                        }
                         //console.log('Hardcoded param',param.name);
                         action.parameters.push(param);
                     }
-                    url = url.split('?')[0];
+
+                    // Move query params to a fragment, so they're not strictly used, but
+                    // the paths become distinct, everything validates, and they can be
+                    // used by any tools that do understand them.
+                    url = url.replace('?', '#');
                 }
 
-                if (addFragment) {
-                    url += '#'+p;
+                if (op.input && op.input.shape) {
+                    // Add any other required query params to the URL fragment too
+                    const paramShape = src.shapes[op.input.shape];
+                    const requiredQueryParamNames = _.filter(paramShape.members, (member, memberName) =>
+                        _.includes(['querystring', 'header', 'headers'], member.location) &&
+                        _.includes(paramShape.required, memberName)
+                    ).map((param) => param.locationName);
+
+                    if (requiredQueryParamNames.length > 0) {
+                        url += (url.indexOf('#') > -1 ? '&' : '#') + requiredQueryParamNames.join('&');
+                    }
                 }
 
-                var attached = false;
+                // Work out a unique path identifier sufficient to look up the relevant
+                // path given a full request, for routing etc.
+                switch (protocol) {
+                    case 'rest-xml':
+                    case 'rest-json':
+                        // Identified by specific requestUri params.
+                        // Include all params from requestUri but with a # - already
+                        // done by the URL parsing above though.
+                        break;
+
+                    case 'query':
+                    case 'ec2':
+                        // Identified by Action={opName} parameter
+                        url += (url.indexOf('#') > -1 ? '&' : '#') + 'Action=' + op.name;
+                        action.parameters = (action.parameters || []).concat({
+                            name: 'Action',
+                            in: 'query',
+                            required: true,
+                            type: 'string',
+                            enum: [op.name]
+                        });
+                        break;
+
+                    case 'json':
+                        // Identified by X-Amz-Target={prefix.opName} header
+                        const amzTarget = src.metadata.targetPrefix + '.' + op.name;
+                        url += (url.indexOf('#') > -1 ? '&' : '#') + 'X-Amz-Target=' + amzTarget;
+                        action.parameters = (action.parameters || []).concat({
+                            name: 'X-Amz-Target',
+                            in: 'header',
+                            required: true,
+                            type: 'string',
+                            enum: [amzTarget]
+                        });
+                        break;
+
+                    default:
+                        throw new Error('Unknown protocol: ' + protocol);
+                }
+
+                // Before adding the operation, we need to confirm the URL+method don't conflict
                 if (s.paths[url]) {
-                    if (pathCache[deparameterisePath(url)]) {
-                        s['x-hasEquivalentPaths'] = true;
-                    }
-                    pathCache[deparameterisePath(url)] = true;
-                    if (s.paths[url][actionName]) {
-                        addFragment = true;
-                        url += '#'+p;
-                    }
-                    else {
-                        s.paths[url][actionName] = action;
-                        attached = true;
-                    }
-                }
-                if (!attached) {
-                    s.paths[url] = path; // path contains action
-                    if (sigV4Headers) {
-                        s.paths[url].parameters = [];
-                        for (var h in v4Params) {
-                            var param = {};
-                            param["$ref"] = '#/parameters/'+v4Params[h];
-                            s.paths[url].parameters.push(param);
-                        }
-                    }
-                    else if (sigS3Headers) {
-                        s.paths[url].parameters = [];
-                        for (var h in s3Headers) {
-                            var param = {};
-                            param["$ref"] = '#/parameters/'+s3Headers[h];
-                            s.paths[url].parameters.push(param);
-                        }
-                    }
-                    else if (sigV2Params) {
-                        s.paths[url].parameters = [];
-                        for (var p in v2Params) {
-                            var param = {};
-                            param["$ref"] = '#/parameters/'+v2Params[p];
-                            s.paths[url].parameters.push(param);
+                    const conflictingAction = s.paths[url][method];
+                    if (conflictingAction) {
+                        const deprecatedUrl = url + (url.indexOf('#') > -1 ? '&' : '#') + 'deprecated!';
+
+                        if (conflictingAction.deprecated) {
+                            // We're a new version of a deprecated action. Move the deprecated version,
+                            // and we'll overwrite the existing action when we're attached below.
+                            if (s.paths[deprecatedUrl] && s.paths[deprecatedUrl][method]) {
+                                throw new Error('Multiple deprecated methods for ' + url);
+                            } else {
+                                attachOperation(s.paths, deprecatedUrl, method, conflictingAction, signatureVersion);
+                            }
+                        } else if (action.deprecated) {
+                            // We're the deprecated version of a replaced action. Move ourselves elsewhere.
+                            url = deprecatedUrl;
+                        } else {
+                            throw new Error('Two conflicting actions, neither deprecated: ' +
+                                action.operationId + ' and ' + conflictingAction.operationId);
                         }
                     }
                 }
+
+                attachOperation(s.paths, url, method, action, signatureVersion);
             }
 
             for (var d in src.shapes) {
@@ -894,10 +995,10 @@ module.exports = {
 
             postProcess(s,options);
 
-            if (addFragment) {
+            const paths = Object.keys(s.paths);
+            if (_.uniqBy(paths, deparameterisePath).length !== paths.length) {
                 s['x-hasEquivalentPaths'] = true;
-            }
-            if (s['x-hasEquivalentPaths'] === false) {
+            } else {
                 delete s['x-hasEquivalentPaths'];
             }
 
