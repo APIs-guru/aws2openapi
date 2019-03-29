@@ -14,8 +14,6 @@ const amzHeaders = ['X-Amz-Content-Sha256','X-Amz-Date','X-Amz-Algorithm','X-Amz
     'X-Amz-Signature','X-Amz-SignedHeaders'];
 const s3Headers = ['x-amz-security-token'];
 const v2Params = ['AWSAccessKeyId', 'Action', 'SignatureMethod', 'SignatureVersion', 'Timestamp', 'Version', 'Signature'];
-const v4Required = ['Action', 'Version'];
-const v4Params = [].concat(v4Required, amzHeaders);
 
 var multiParams = [];
 
@@ -618,9 +616,9 @@ function attachOperation(paths, url, method, action, signatureVersion) {
     paths[url] = { [method]: action };
     if (signatureVersion === 4) {
         paths[url].parameters = [];
-        for (var h in v4Params) {
+        for (var h in amzHeaders) {
             var param = {};
-            param["$ref"] = '#/parameters/'+v4Params[h];
+            param["$ref"] = '#/parameters/'+amzHeaders[h];
             paths[url].parameters.push(param);
         }
     }
@@ -719,17 +717,6 @@ module.exports = {
                     s.securityDefinitions.hmac.description = 'Amazon Signature authorization v4';
                     s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv4';
                     signatureVersion = 4;
-
-                    // https://docs.aws.amazon.com/IAM/latest/APIReference/CommonParameters.html
-
-                    for (var p in v4Required) {
-                        var param = {};
-                        param.name = v4Required[p];
-                        param["in"] = 'query';
-                        param.type = 'string';
-                        param.required = true;
-                        s.parameters[v4Required[p]] = param;
-                    }
 
                     for (var h in amzHeaders) {
                         var header = {};
@@ -932,13 +919,22 @@ module.exports = {
                     case 'ec2':
                         // Identified by Action={opName} parameter
                         url += (url.indexOf('#') > -1 ? '&' : '#') + 'Action=' + op.name;
-                        action.parameters = (action.parameters || []).concat({
-                            name: 'Action',
-                            in: 'query',
-                            required: true,
-                            type: 'string',
-                            enum: [op.name]
-                        });
+                        action.parameters = (action.parameters || []).concat([
+                            {
+                                name: 'Action',
+                                in: 'query',
+                                required: true,
+                                type: 'string',
+                                enum: [op.name]
+                            },
+                            {
+                                name: 'Version',
+                                in: 'query',
+                                required: true,
+                                type: 'string',
+                                enum: [src.metadata.apiVersion]
+                            }
+                        ]);
                         break;
 
                     case 'json':
