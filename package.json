@@ -18,6 +18,8 @@
   "author": "Mike Ralphson <mike.ralphson@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "aws-regions": "^2.0.0",
+    "aws-sdk": "^2.435.0",
     "js-yaml": "^3.13.1",
     "lodash": "^4.17.11",
     "recursive-readdir": "^2.1.0",
