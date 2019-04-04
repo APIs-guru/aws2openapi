@@ -847,6 +847,36 @@ module.exports = {
 
                 var url = op.http.requestUri;
 
+                if (src.metadata.endpointPrefix === 'sqs') {
+                    // SQS has unique special logic for its URLs. If a QueueUrl param is provided, it
+                    // replaces the base endpoint entirely. That effectively means that the path for
+                    // operations on a specific queue needs to be within /{accountId}/{queueName}.
+                    // See https://github.com/aws/aws-sdk-js/blob/bdcca26/lib/services/sqs.js#L120-L129
+                    // for the AWS SDK implementation side of this.
+
+                    if (_.find(action.parameters, { name: 'QueueUrl' })) {
+                        url = '/{AccountNumber}/{QueueName}' + url;
+
+                        action.parameters.push({
+                            in: 'path',
+                            name: 'AccountNumber',
+                            required: true,
+                            description: 'The AWS account number',
+                            type: 'integer'
+                        });
+                        action.parameters.push({
+                            in: 'path',
+                            name: 'QueueName',
+                            required: true,
+                            description: 'The name of the queue',
+                            type: 'string'
+                        });
+
+                        // Remove the QueueUrl param (this path replaces it)
+                        action.parameters = _.reject(action.parameters, { name: 'QueueUrl' })
+                    }
+                }
+
                 url = url.replace(/(\{.+?\})/g,function(match,group1){ // store multiple parameters e.g. {key+} for later use. Only seen in s3
                     var result = group1.replace('+}','}');
                     if (result != group1) {
