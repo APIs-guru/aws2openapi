@@ -18,10 +18,10 @@
   "author": "Mike Ralphson <mike.ralphson@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "js-yaml": "^3.8.2",
     "lodash": "^4.17.11",
     "recursive-readdir": "^2.1.0",
     "reftools": "^1.0.4",
-    "yaml": "^1.5.0",
     "yargs": "12.0.2"
   },
   "devDependencies": {

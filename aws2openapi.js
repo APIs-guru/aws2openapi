@@ -5,7 +5,7 @@ const path = require('path');
 const SwaggerParser = require('swagger-parser');
 const validator = require('is-my-json-valid');
 const rr = require('recursive-readdir');
-const yaml = require('yaml');
+const yaml = require('js-yaml');
 const aws2oa = require('./index.js');
 const helpers = require('./helpers.js');
 
@@ -90,7 +90,7 @@ function doit(input) {
 			lastOrigin.url = lastOrigin.url.replace('{filename}',prefix+'/'+version+'/swagger.'+(outputYaml ? 'yaml' : 'json'));
 
 			if (outputYaml) {
-				fs.writeFileSync(outputDir+prefix+'/'+version+'/swagger.yaml',yaml.stringify(openapi),'utf8');
+				fs.writeFileSync(outputDir+prefix+'/'+version+'/swagger.yaml',yaml.safeDump(openapi,{lineWidth: -1}),'utf8');
 			}
 			else {
 				fs.writeFileSync(outputDir+prefix+'/'+version+'/swagger.json',JSON.stringify(openapi,null,2),'utf8');

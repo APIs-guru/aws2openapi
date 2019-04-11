@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const rr = require('recursive-readdir');
+const yaml = require('js-yaml');
 const helpers = require('./helpers.js');
 
 var results = [];
