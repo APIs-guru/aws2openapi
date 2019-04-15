@@ -370,7 +370,7 @@ function postProcess(openapi,options){
         if (options.waiters) {
             for (var w in options.waiters.waiters) {
                 var waiter = options.waiters.waiters[w];
-                if (waiter.operation == action.operationId) {
+                if (waiter.operation == (action['x-aws-operation-name'] || action.operationId)) {
                     if (!action["x-waiters"]) {
                         action["x-waiters"] = [];
                     }
@@ -574,8 +574,8 @@ function attachParameters(openapi, src, op, action, options) {
         });
     }
 
-    if (options.paginators && options.paginators.pagination[action.operationId]) {
-        var pag = options.paginators.pagination[action.operationId];
+    if (options.paginators && options.paginators.pagination[op.name]) {
+        var pag = options.paginators.pagination[op.name];
         if (pag.limit_key && !_.some(action.parameters, { name: pag.limit_key })) {
             var param = {};
             param.name = pag.limit_key;
@@ -816,6 +816,7 @@ module.exports = {
                     }
                     var method = op.http.method.toLocaleLowerCase();
                     if (protocol === 'ec2' || protocol === 'query') {
+                        action['x-aws-operation-name'] = op.name; // Save separately, for reference elsewhere
                         action.operationId = method.toUpperCase() + ' ' + op.name;
                     } else {
                         action.operationId = op.name; // TODO not handled is 'alias', add as a vendor extension if necessary
