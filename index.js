@@ -485,7 +485,11 @@ function attachParameters(openapi, src, op, action, options) {
             case 'ec2':
                 // Serialises all params into a query string
                 action.parameters = _.map(paramShape.members, (member, name) => _.omitBy({
-                    name: member.locationName || name,
+                    name: src.metadata.protocol === 'ec2'
+                        // EC2 uppercases the first char of param names, unless there's a queryName
+                        // is provided. See query_param_serializer's ucfirst() in the AWS SDK.
+                        ? member.queryName || _.upperFirst(member.locationName || name)
+                        : member.locationName || name,
                     in: 'query',
                     required: _.includes(paramShape.required, name),
                     description: clean(member.documentation || ''),
