@@ -12,14 +12,16 @@ const helpers = require('./helpers.js');
 var swaggerSchema = require('./validation/swagger2Schema.json');
 var preferred = require('./preferred.json');
 
-function doit(input) {
+function doit(input, regionConfig) {
 	var outputDir = (process.argv.length>3 ? process.argv[3] : './aws/');
 	if (!outputDir.endsWith('/')) outputDir += '/';
 	var outputYaml = (process.argv.length>4 ? (process.argv[4] == '-y') : false);
 
 	console.log(input);
 	var aws = require(path.resolve(input));
-	var options = {};
+	var options = {
+		regionConfig: regionConfig
+	};
 	try {
 		options.paginators = require(path.resolve(input.replace('.normal.','.paginators.')));
 		console.log('  Has paginators');
@@ -103,19 +105,58 @@ function doit(input) {
 	}
 }
 
-var inputspec = process.argv[2];
+function getRegionConfig(awsRoot) {
+    const regionConfig = require(path.join(awsRoot, 'lib', 'region_config_data.json'));
+
+    // We make a few amends to the official AWS endpoint config data. It describes the URLs
+    // that the SDK sends requests to, but that's only a subset of all valid URLs, so we add a
+    // couple of extra options that might be also relevant.
+
+    // All based on https://docs.aws.amazon.com/general/latest/gr/rande.html
+    // See buildServers below to understand how this is all used.
+
+    // EC2/autoscaling/ELB/EMR all allow both region-less and regioned URLs:
+    regionConfig.patterns['regionOrGeneral'] = {
+        "endpoint": "{service}.{region}.amazonaws.com",
+        "generalEndpoint": "{service}.amazonaws.com"
+    };
+    regionConfig.rules['us-east-1/ec2'] = 'regionOrGeneral';
+    regionConfig.rules['us-east-1/autoscaling'] = 'regionOrGeneral';
+    regionConfig.rules['us-east-1/elasticloadbalancing'] = 'regionOrGeneral';
+    regionConfig.rules['us-west-2/elasticmapreduce'] = 'regionOrGeneral';
+    regionConfig.rules['*/rds'] = 'regionOrGeneral';
+
+    // S3 allows both - and .: s3.us-east-1.amazonaws.com or s3-us-east-1.amazonaws.com
+    regionConfig.patterns['s3signature'].endpoint = "{service}{dash-or-dot}{region}.amazonaws.com";
+
+    // S3 also has a general endpoint, resolving to us-east-1
+    regionConfig.rules['us-east-1/s3'].endpoint = "{service}{dash-or-dot}{region}.amazonaws.com";
+    regionConfig.rules['us-east-1/s3'].generalEndpoint = "{service}.amazonaws.com";
+
+    // Chime/health/support have special non-standard endpoints
+    regionConfig.rules['*/chime'] = { endpoint: "service.chime.aws.amazon.com" };
+    regionConfig.rules['*/health'] = { endpoint: "https://health.us-east-1.amazonaws.com" };
+    regionConfig.rules['*/support'] = { endpoint: "https://support.us-east-1.amazonaws.com" };
+
+    return regionConfig;
+}
+
+let inputspec = process.argv[2];
 if (inputspec) {
     inputspec = path.resolve(inputspec);
-    var stats = fs.statSync(inputspec);
+    const awsRoot = path.dirname(inputspec); // We require the given AWS spec to always be one dir down from the SDK root
+    const regionConfig = getRegionConfig(awsRoot);
+
+    const stats = fs.statSync(inputspec);
     if (stats.isFile()) {
-    	doit(inputspec);
+    	doit(inputspec, regionConfig);
     }
     else {
       rr(inputspec, function(err, files) {
   	    for (var f in files) {
-	      var filename = files[f];
+	      const filename = files[f];
   		  if (filename.indexOf('normal')>=0) {
-	        doit(filename);
+	        doit(filename, regionConfig);
 		  }
 	    }
 	  });

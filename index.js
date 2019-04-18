@@ -1,40 +1,7 @@
-var util = require('util');
 var _ = require('lodash');
 var recurse = require('reftools/lib/recurse.js').recurse;
 
 var awsRegions = require('aws-regions');
-var awsRegionConfig = require('aws-sdk/lib/region_config_data.json');
-
-// We make a few amends to the official AWS endpoint config data. It describes the URLs
-// that the SDK sends requests to, but that's only a subset of all valid URLs, so we add a
-// couple of extra options that might be also relevant.
-(function expandRegionConfig(regionConfig) {
-    // All based on https://docs.aws.amazon.com/general/latest/gr/rande.html
-    // See buildServers below to understand how this is all used.
-
-    // EC2/autoscaling/ELB/EMR all allow both region-less and regioned URLs:
-    regionConfig.patterns['regionOrGeneral'] = {
-        "endpoint": "{service}.{region}.amazonaws.com",
-        "generalEndpoint": "{service}.amazonaws.com"
-    };
-    regionConfig.rules['us-east-1/ec2'] = 'regionOrGeneral';
-    regionConfig.rules['us-east-1/autoscaling'] = 'regionOrGeneral';
-    regionConfig.rules['us-east-1/elasticloadbalancing'] = 'regionOrGeneral';
-    regionConfig.rules['us-west-2/elasticmapreduce'] = 'regionOrGeneral';
-    regionConfig.rules['*/rds'] = 'regionOrGeneral';
-
-    // S3 allows both - and .: s3.us-east-1.amazonaws.com or s3-us-east-1.amazonaws.com
-    regionConfig.patterns['s3signature'].endpoint = "{service}{dash-or-dot}{region}.amazonaws.com";
-
-    // S3 also has a general endpoint, resolving to us-east-1
-    regionConfig.rules['us-east-1/s3'].endpoint = "{service}{dash-or-dot}{region}.amazonaws.com";
-    regionConfig.rules['us-east-1/s3'].generalEndpoint = "{service}.amazonaws.com";
-
-    // Chime/health/support have special non-standard endpoints
-    regionConfig.rules['*/chime'] = { endpoint: "service.chime.aws.amazon.com" };
-    regionConfig.rules['*/health'] = { endpoint: "https://health.us-east-1.amazonaws.com" };
-    regionConfig.rules['*/support'] = { endpoint: "https://support.us-east-1.amazonaws.com" };
-})(awsRegionConfig);
 
 var ourVersion = require('./package.json').version;
 var actions = ['get','post','put','patch','delete','head','options','trace'];
@@ -108,7 +75,7 @@ function generateRegionPrefix(region) {
 
 // Build a OpenAPI v3-compatible 'servers' object for this endpoint, for all regions.
 // For now this will be attached as x-servers, for v2 compatibility (see swaggerplusplus)
-function buildServers(endpointPrefix, serviceName) {
+function buildServers(endpointPrefix, serviceName, awsRegionConfig) {
     // This uses the same logic for config lookup as aws-sdk/lib/region_config.js
 
     // Build a map of URL -> regions covered by that URL
@@ -838,7 +805,8 @@ module.exports = {
             s.schemes = ['https']; // GitHub issue #3
             s['x-servers'] = buildServers(
                 src.metadata.endpointPrefix,
-                src.metadata.serviceAbbreviation || src.metadata.serviceFullName
+                src.metadata.serviceAbbreviation || src.metadata.serviceFullName,
+                options.regionConfig
             );
 
             s['x-hasEquivalentPaths'] = false; // may get removed later
