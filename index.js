@@ -1,6 +1,7 @@
-var util = require('util');
 var _ = require('lodash');
 var recurse = require('reftools/lib/recurse.js').recurse;
+
+var awsRegions = require('aws-regions');
 
 var ourVersion = require('./package.json').version;
 var actions = ['get','post','put','patch','delete','head','options','trace'];
@@ -61,6 +62,110 @@ function checkDef(openapi,name) {
         //console.log('Forcing definition of:',name);
         openapi.definitions[name] = {};
     }
+}
+
+// Taken from aws-sdk/lib/region_config.js:
+function generateRegionPrefix(region) {
+    if (!region) return null;
+
+    var parts = region.split('-');
+    if (parts.length < 3) return null;
+    return parts.slice(0, parts.length - 2).join('-') + '-*';
+  }
+
+// Build a OpenAPI v3-compatible 'servers' object for this endpoint, for all regions.
+// For now this will be attached as x-servers, for v2 compatibility (see swaggerplusplus)
+function buildServers(endpointPrefix, serviceName, awsRegionConfig) {
+    // This uses the same logic for config lookup as aws-sdk/lib/region_config.js
+
+    // Build a map of URL -> regions covered by that URL
+    const regionsByEndpoint = awsRegions.list().reduce((regionsByEndpoint, region) => {
+        // From the AWS SDK. Defines a list of keys for the config of this service, from
+        // most to least specific. We'll use the most specific that exists.
+        const regionPrefix = generateRegionPrefix(region.code);
+        const endpointKeys = [
+            [region.code, endpointPrefix],
+            [regionPrefix, endpointPrefix],
+            [region.code, '*'],
+            [regionPrefix, '*'],
+            ['*', endpointPrefix],
+            ['*', '*']
+        ].map((item) => item[0] && item[1] ? item.join('/') : null);
+
+        const endpointConfigKey = _.find(endpointKeys, (k) => awsRegionConfig.rules[k]);
+
+        // Config is either a config, or a key for a config in the 'patterns' object
+        const endpointConfig = typeof awsRegionConfig.rules[endpointConfigKey] === 'string'
+            ? awsRegionConfig.patterns[awsRegionConfig.rules[endpointConfigKey]]
+            : awsRegionConfig.rules[endpointConfigKey];
+
+        let endpoints = [];
+
+        // If no protocol is specified, both HTTP & HTTPS are allowed
+        if (endpointConfig.endpoint.match(/^https?:\/\//)) {
+            endpoints.push(endpointConfig.endpoint);
+        } else {
+            endpoints.push('http://' + endpointConfig.endpoint);
+            endpoints.push('https://' + endpointConfig.endpoint);
+        }
+
+        // If we have both region & general endpoints, add the general endpoint(s) too
+        if (endpointConfig.generalEndpoint) {
+            if (endpointConfig.generalEndpoint.match(/^https?:\/\//)) {
+                endpoints.push(endpointConfig.generalEndpoint);
+            } else {
+                endpoints.push('http://' + endpointConfig.generalEndpoint);
+                endpoints.push('https://' + endpointConfig.generalEndpoint);
+            }
+        }
+
+        endpoints.forEach((endpoint) => {
+            if (!regionsByEndpoint[endpoint]) {
+                regionsByEndpoint[endpoint] = [region];
+            } else {
+                regionsByEndpoint[endpoint].push(region);
+            }
+        });
+
+        return regionsByEndpoint;
+    }, {});
+
+    // Turn the endpoint URLs + regions list into nice url + description + vars objects
+    return Object.keys(regionsByEndpoint).map((endpoint) => {
+        const validRegions = regionsByEndpoint[endpoint];
+        const regionNames = validRegions.map(r => r.full_name);
+
+        const url = endpoint.replace('{service}', endpointPrefix);
+        const variables = {};
+
+        let description;
+        let endpointDescription = (validRegions.length === 1)
+            ? " endpoint for " + regionNames[0]
+            : (validRegions.length <= 3)
+                ? " endpoint for " + regionNames.slice(0, -1).join(', ')
+                    + " and " + regionNames[regionNames.length - 1]
+                : " multi-region endpoint";
+
+        if (url.includes('{region}')) {
+            variables['region'] = {
+                description: "The AWS region",
+                enum: validRegions.map((region) => region.code)
+            };
+            description = "The " + serviceName + endpointDescription
+        } else {
+            description = "The general " + serviceName + endpointDescription;
+        }
+
+        // Just used for s3, which allows either separator in many cases
+        if (url.includes('{dash-or-dot}')) {
+            variables['dash-or-dot'] = {
+                description: 'The service/region URL separator',
+                enum: ['.', '-']
+            };
+        }
+
+        return { url, variables, description };
+    });
 }
 
 function findResponsesForShape(openapi,shapeName){
@@ -701,8 +806,14 @@ module.exports = {
             };
             s.host = src.metadata.endpointPrefix+'.amazonaws.com';
             s.basePath = '/';
-            s['x-hasEquivalentPaths'] = false; // may get removed later
             s.schemes = ['https']; // GitHub issue #3
+            s['x-servers'] = buildServers(
+                src.metadata.endpointPrefix,
+                src.metadata.serviceAbbreviation || src.metadata.serviceFullName,
+                options.regionConfig
+            );
+
+            s['x-hasEquivalentPaths'] = false; // may get removed later
             s.consumes = [];
             s.produces = [];
 
