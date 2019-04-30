@@ -370,7 +370,7 @@ function postProcess(openapi,options){
         if (options.waiters) {
             for (var w in options.waiters.waiters) {
                 var waiter = options.waiters.waiters[w];
-                if (waiter.operation == action.operationId) {
+                if (waiter.operation == (action['x-aws-operation-name'] || action.operationId)) {
                     if (!action["x-waiters"]) {
                         action["x-waiters"] = [];
                     }
@@ -483,14 +483,14 @@ function attachParameters(openapi, src, op, action, options) {
 
             case 'query':
             case 'ec2':
-                // Serialises all params into a query string
+                // Serialises all params, into a query string for GET or formdata for POST
                 action.parameters = _.map(paramShape.members, (member, name) => _.omitBy({
                     name: src.metadata.protocol === 'ec2'
                         // EC2 uppercases the first char of param names, unless there's a queryName
                         // is provided. See query_param_serializer's ucfirst() in the AWS SDK.
                         ? member.queryName || _.upperFirst(member.locationName || name)
                         : member.locationName || name,
-                    in: 'query',
+                    in: op.http.method === 'POST' ? 'formData' : 'query',
                     required: _.includes(paramShape.required, name),
                     description: clean(member.documentation || ''),
                     ...(src.shapes[member.shape] ?
@@ -519,7 +519,7 @@ function attachParameters(openapi, src, op, action, options) {
             // Any list parameters need to be filtered to just param-valid properties
             // Any object query params need to be converted into their flattened forms
 
-            if (param.in !== 'query') {
+            if (param.in !== 'query' && param.in !== 'formData') {
                 return param;
             }
 
@@ -530,11 +530,11 @@ function attachParameters(openapi, src, op, action, options) {
                 // until OpenAPI 3, but in the short term we can enumerate N examples
                 return _.flatMap(_.range(param.maxProperties || 3), (i) => [{
                     name: param.name + '.' + i + '.' + 'key',
-                    in: 'query',
+                    in: param.in,
                     type: 'string'
                 }, {
                     name: param.name + '.' + i + '.' + 'value',
-                    in: 'query',
+                    in: param.in,
                     type: 'string' // Not accurate, but enough for now
                 }]);
             } else if (param.type === 'object') {
@@ -550,7 +550,7 @@ function attachParameters(openapi, src, op, action, options) {
 
                     return _.omitBy({
                         name: param.name + '.' + subParamName,
-                        in: 'query',
+                        in: param.in,
                         required: subParam.required,
                         description: [param.description, subParam.description].join('\n'),
 
@@ -562,7 +562,7 @@ function attachParameters(openapi, src, op, action, options) {
             } else if (param.type === 'array') {
                 return {
                     name: param.name,
-                    in: 'query',
+                    in: param.in,
                     required: param.required,
                     description: param.description,
                     type: 'array',
@@ -574,8 +574,8 @@ function attachParameters(openapi, src, op, action, options) {
         });
     }
 
-    if (options.paginators && options.paginators.pagination[action.operationId]) {
-        var pag = options.paginators.pagination[action.operationId];
+    if (options.paginators && options.paginators.pagination[op.name]) {
+        var pag = options.paginators.pagination[op.name];
         if (pag.limit_key && !_.some(action.parameters, { name: pag.limit_key })) {
             var param = {};
             param.name = pag.limit_key;
@@ -796,9 +796,16 @@ module.exports = {
             s.paths = {};
             s.definitions = {};
 
-            for (var p in src.operations) {
-                var op = src.operations[p];
+            // EC2/Query protocol operations are all valid as either GET or POST, so in
+            // those cases we duplicate every operation, once for each method
+            const operations = (protocol === 'ec2' || protocol === 'query')
+                ? _.flatMap(src.operations, (op) => [
+                    _.merge(_.cloneDeep(op), { http: { method: 'GET' } }),
+                    _.merge(_.cloneDeep(op), { http: { method: 'POST' } }),
+                ])
+                : Object.values(src.operations);
 
+            for (let op of operations) {
                 var action = { };
 
                 if (op.deprecated) action.deprecated = true;
@@ -808,7 +815,12 @@ module.exports = {
                         s.schemes.push('http');
                     }
                     var method = op.http.method.toLocaleLowerCase();
-                    action.operationId = p; // TODO not handled is 'alias', add as a vendor extension if necessary
+                    if (protocol === 'ec2' || protocol === 'query') {
+                        action['x-aws-operation-name'] = op.name; // Save separately, for reference elsewhere
+                        action.operationId = method.toUpperCase() + ' ' + op.name;
+                    } else {
+                        action.operationId = op.name; // TODO not handled is 'alias', add as a vendor extension if necessary
+                    }
                     action.description = (op.documentation ? clean(op.documentation) : '');
                     if (op.documentationUrl) {
                         action.externalDocs = {
@@ -823,9 +835,9 @@ module.exports = {
                         success.schema["$ref"] = '#/definitions/'+op.output.shape;
                         checkDef(s,op.output.shape);
 
-                        if (options.examples && options.examples.examples[p]) {
-                            for (var e in options.examples.examples[p]) {
-                                var example = options.examples.examples[p][e];
+                        if (options.examples && options.examples.examples[op.name]) {
+                            for (var e in options.examples.examples[op.name]) {
+                                var example = options.examples.examples[op.name][e];
                                 if (example.output) {
                                     src.shapes[op.output.shape].example = example.output;
                                 }
