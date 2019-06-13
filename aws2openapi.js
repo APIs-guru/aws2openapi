@@ -2,15 +2,17 @@
 
 const fs = require('fs');
 const path = require('path');
-const SwaggerParser = require('swagger-parser');
+//const SwaggerParser = require('swagger-parser');
 const validator = require('is-my-json-valid');
 const rr = require('recursive-readdir');
 const yaml = require('js-yaml');
 const aws2oa = require('./index.js');
 const helpers = require('./helpers.js');
 
-var swaggerSchema = require('./validation/swagger2Schema.json');
+const openapiSchema = require('./validation/openapi-30.json');
 var preferred = require('./preferred.json');
+
+const validate = validator(openapiSchema);
 
 function doit(input, regionConfig) {
 	var outputDir = (process.argv.length>3 ? process.argv[3] : './aws/');
@@ -54,17 +56,16 @@ function doit(input, regionConfig) {
 		}
 		if (openapi) {
 
-			SwaggerParser.validate(openapi, function(vErr, api) {
-				if (vErr) {
-					console.log(input);
-					console.error(vErr);
-					process.exitCode = 1;
-				}
-			});
+			//SwaggerParser.validate(openapi, function(vErr, api) {
+			//	if (vErr) {
+			//		console.log(input);
+			//		console.error(vErr);
+			//		process.exitCode = 1;
+			//	}
+			//});
 
-			var validate = validator(swaggerSchema);
 			validate(openapi,{
-				greedy: true,
+				//greedy: true,
 				verbose: true
 			});
 			var errors = validate.errors;
@@ -89,13 +90,13 @@ function doit(input, regionConfig) {
 
 			var origin = openapi.info['x-origin'];
 			var lastOrigin = origin[origin.length-1];
-			lastOrigin.url = lastOrigin.url.replace('{filename}',prefix+'/'+version+'/swagger.'+(outputYaml ? 'yaml' : 'json'));
+			lastOrigin.url = lastOrigin.url.replace('{filename}',prefix+'/'+version+'/openapi.'+(outputYaml ? 'yaml' : 'json'));
 
 			if (outputYaml) {
-				fs.writeFileSync(outputDir+prefix+'/'+version+'/swagger.yaml',yaml.safeDump(openapi,{lineWidth: -1}),'utf8');
+				fs.writeFileSync(outputDir+prefix+'/'+version+'/openapi.yaml',yaml.dump(openapi,{lineWidth: -1}),'utf8');
 			}
 			else {
-				fs.writeFileSync(outputDir+prefix+'/'+version+'/swagger.json',JSON.stringify(openapi,null,2),'utf8');
+				fs.writeFileSync(outputDir+prefix+'/'+version+'/openapi.json',JSON.stringify(openapi,null,2),'utf8');
 			}
 		}
 	});
