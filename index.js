@@ -58,9 +58,9 @@ function rename(obj,key,newKey){
 }
 
 function checkDef(openapi,name) {
-    if (!openapi.definitions[name]) {
+    if (!openapi.components.schemas[name]) {
         //console.log('Forcing definition of:',name);
-        openapi.definitions[name] = {};
+        openapi.components.schemas[name] = {};
     }
 }
 
@@ -184,7 +184,7 @@ function findResponsesForShape(openapi,shapeName){
                     r = parseInt(r,10);
                     if ((r>=200) && (r<700)) {
                         var ref = (r.schema ? r.schema["$ref"] : '');
-                        if (ref == '#/definitions/'+shapeName) ok = true;
+                        if (ref == '#/components/schemas/'+shapeName) ok = true;
                     }
                 }
                 if (ok) result.push(r);
@@ -322,9 +322,9 @@ function transformShape(openapi,shape){
         rename(shape,'max','maxProperties');
         shape.type = 'object';
         shape.additionalProperties = {
-            '$ref': '#/definitions/'+shape.value.shape
+            '$ref': '#/components/schemas/'+shape.value.shape
         };
-        // In OpenAPI 3, we could use propertyNames/Patterns here, and use the shape.key.shape to
+        // TODO In OpenAPI 3, we could use propertyNames/Patterns here, and use the shape.key.shape to
         // only allow valid keys. For now we allow any string.
 
         checkDef(openapi,shape.value.shape);
@@ -358,7 +358,7 @@ function transformShape(openapi,shape){
 
     recurse(shape,{},function(obj,key,state){
         if (key == 'shape') {
-            obj["$ref"] = '#/definitions/'+obj[key];
+            obj["$ref"] = '#/components/schemas/'+obj[key];
             checkDef(openapi,obj[key]);
             delete obj[key];
         }
@@ -507,9 +507,9 @@ function doit(methodUri,op,pi) {
             //console.warn('Missing path parameter '+match);
             let nparam = {};
             nparam.name = name;
-            nparam.type = 'string';
             nparam.in = 'path';
             nparam.required = true;
+            nparam.schema = { type: 'string' };
             op.parameters.push(nparam); // correct for missing path parameters (2?)
         }
         return match;
@@ -520,7 +520,7 @@ function fillInMissingPathParameters(openapi) {
     for (let p in openapi.paths) {
         let pi = openapi.paths[p];
         for (let o in pi) {
-            if (['get','post','put','patch','delete','head','options'].indexOf(o)>=0) {
+            if (['get','post','put','patch','delete','head','options','trace'].indexOf(o)>=0) {
                 let op = pi[o];
                 doit(p,op,pi);
             }
@@ -530,11 +530,11 @@ function fillInMissingPathParameters(openapi) {
 
 function patches(openapi) {
     if (openapi.info["x-serviceName"] === 'data.mediastore') {
-        delete openapi.definitions.GetObjectResponse.required;
+        delete openapi.components.schemas.GetObjectResponse.required;
     }
 }
 
-function attachParameters(openapi, src, op, action, options) {
+function attachParameters(openapi, src, op, action, consumes, options) {
     if (op.input && op.input.shape) {
         // Build parameters details for these params, according to the
         // standard approach for each protocol.
@@ -556,9 +556,11 @@ function attachParameters(openapi, src, op, action, options) {
                         }[member.location],
                         required: _.includes(paramShape.required, memberName),
                         description: clean(member.documentation || ''),
-                        ...(src.shapes[member.shape] ?
-                            transformShape(openapi, src.shapes[member.shape]) : {}
-                        )
+                        schema: {
+                            ...(src.shapes[member.shape] ?
+                                transformShape(openapi, src.shapes[member.shape]) : {}
+                            )
+                        }
                     }, _.isUndefined)),
                     (param) => !!param.in
                 );
@@ -566,9 +568,7 @@ function attachParameters(openapi, src, op, action, options) {
                 action.parameters = queryParams;
 
                 if (bodyParams.length) {
-                    const bodyParam = {
-                        name: 'body',
-                        in: 'body',
+                    const requestBody = {
                         required: true,
                         schema: {
                             type: 'object',
@@ -577,22 +577,31 @@ function attachParameters(openapi, src, op, action, options) {
                                 .map(p => p.name),
                             properties: _.mapValues(
                                 _.keyBy(bodyParams, 'name'),
-                                (param) => _.omit(param, ['name', 'required'])
+                                (param) => {
+                                    _.assign(param, param.schema);
+                                    return _.omit(param, ['name', 'required', 'schema'])
+                                }
                             )
                         }
                     };
 
-                    if (bodyParam.schema.required.length === 0) {
-                        delete bodyParam.schema.required;
+                    requestBody.content = {};
+                    for (let mediatype of consumes) {
+                        requestBody.content[mediatype] = {};
+                        requestBody.content[mediatype].schema = requestBody.schema;
                     }
+                    if (requestBody.schema.required.length === 0) {
+                        delete requestBody.schema.required;
+                    }
+                    delete requestBody.schema;
 
-                    action.parameters.push(bodyParam);
+                    action.requestBody = requestBody;
                 }
                 break;
 
             case 'query':
             case 'ec2':
-                // Serialises all params, into a query string for GET or formdata for POST
+                // Serialises all params, into a query string for GET or formData for POST
                 action.parameters = _.map(paramShape.members, (member, name) => _.omitBy({
                     name: src.metadata.protocol === 'ec2'
                         // EC2 uppercases the first char of param names, unless there's a queryName
@@ -602,22 +611,23 @@ function attachParameters(openapi, src, op, action, options) {
                     in: op.http.method === 'POST' ? 'formData' : 'query',
                     required: _.includes(paramShape.required, name),
                     description: clean(member.documentation || ''),
-                    ...(src.shapes[member.shape] ?
-                        transformShape(openapi, src.shapes[member.shape]) : {}
-                    )
+                    schema: {
+                        ...(src.shapes[member.shape] ?
+                            transformShape(openapi, src.shapes[member.shape]) : {}
+                        )
+                    }
                 }, _.isUndefined));
                 break;
 
             case 'json':
                 // All params are sent as a JSON object in the body
-                const param = {
-                    name: 'body',
-                    in: 'body',
-                    required: true,
-                    schema: { '$ref': '#/definitions/' + op.input.shape }
-                };
                 checkDef(openapi,op.input.shape);
-                action.parameters = [param];
+                action.requestBody = { required: true, content: {} };
+                for (let mediatype of consumes) {
+                    action.requestBody.content[mediatype] = {
+                        schema: { '$ref': '#/components/schemas/' + op.input.shape }
+                    };
+                }
                 break;
 
             default:
@@ -640,11 +650,11 @@ function attachParameters(openapi, src, op, action, options) {
                 return _.flatMap(_.range(param.maxProperties || 3), (i) => [{
                     name: param.name + '.' + i + '.' + 'key',
                     in: param.in,
-                    type: 'string'
+                    schema: { type: 'string' }
                 }, {
                     name: param.name + '.' + i + '.' + 'value',
                     in: param.in,
-                    type: 'string' // Not accurate, but enough for now
+                    schema: { type: 'string' } // Not accurate, but enough for now
                 }]);
             } else if (param.type === 'object') {
                 // A 'structure' (in AWS terms). This is a defined set of properties.
@@ -664,8 +674,10 @@ function attachParameters(openapi, src, op, action, options) {
                         description: [param.description, subParam.description].join('\n'),
 
                         // Simplify to stringy params. Not accurate, but enough for now:
-                        type: type === 'array' ? 'array' : 'string',
-                        items: type === 'array' ? { type: 'string' } : undefined,
+                        schema: {
+                            type: type === 'array' ? 'array' : 'string',
+                            items: type === 'array' ? { type: 'string' } : undefined
+                        }
                     }, _.isUndefined)
                 })
             } else if (param.type === 'array') {
@@ -674,8 +686,10 @@ function attachParameters(openapi, src, op, action, options) {
                     in: param.in,
                     required: param.required,
                     description: param.description,
-                    type: 'array',
-                    items: { type: 'string' } // Not accurate, but enough for now
+                    schema: {
+                        type: 'array',
+                        items: { type: 'string' } // Not accurate, but enough for now
+                    }
                 };
             } else {
                 return param;
@@ -688,8 +702,8 @@ function attachParameters(openapi, src, op, action, options) {
         if (pag.limit_key && !_.some(action.parameters, { name: pag.limit_key })) {
             var param = {};
             param.name = pag.limit_key;
-            param.type = 'string';
             param["in"] = 'query';
+            param.schema = { type: 'string' };
             param.description = 'Pagination limit';
             param.required = false;
             if (!action.parameters) {
@@ -698,14 +712,14 @@ function attachParameters(openapi, src, op, action, options) {
             action.parameters.push(param);
         }
         if (pag.input_token && !_.some(action.parameters, { name: pag.input_token })) {
-            if (!Array.isArray(pag.input_token)) {
-                pag.input_token = [pag.input_token]; //it usually isn't...
+            if (!Array.isArray(pag.input_token)) { //it usually isn't...
+                pag.input_token = [pag.input_token];
             }
             for (var t in pag.input_token) {
                 var param = {};
                 param.name = pag.input_token[t];
-                param.type = 'string';
                 param["in"] = 'query';
+                param.schema = { type: 'string' };
                 param.description = 'Pagination token';
                 param.required = false;
                 if (!action.parameters) {
@@ -731,7 +745,7 @@ function attachOperation(paths, url, method, action, signatureVersion) {
         paths[url].parameters = [];
         for (var h in amzHeaders) {
             var param = {};
-            param["$ref"] = '#/parameters/'+amzHeaders[h];
+            param["$ref"] = '#/components/parameters/'+amzHeaders[h];
             paths[url].parameters.push(param);
         }
     }
@@ -739,7 +753,7 @@ function attachOperation(paths, url, method, action, signatureVersion) {
         paths[url].parameters = [];
         for (var h in s3Headers) {
             var param = {};
-            param["$ref"] = '#/parameters/'+s3Headers[h];
+            param["$ref"] = '#/components/parameters/'+s3Headers[h];
             paths[url].parameters.push(param);
         }
     }
@@ -747,7 +761,7 @@ function attachOperation(paths, url, method, action, signatureVersion) {
         paths[url].parameters = [];
         for (var p in v2Params) {
             var param = {};
-            param["$ref"] = '#/parameters/'+v2Params[p];
+            param["$ref"] = '#/components/parameters/'+v2Params[p];
             paths[url].parameters.push(param);
         }
     }
@@ -761,8 +775,10 @@ module.exports = {
 
         process.nextTick(function(){
             var err = {};
+            const produces = [];
+            const consumes = [];
             var s = {};
-            s.swagger = "2.0";
+            s.openapi = "3.0.0";
             s.info = {};
             s.info.version = src.metadata.apiVersion
             s.info["x-release"] = src.metadata.signatureVersion;
@@ -808,48 +824,44 @@ module.exports = {
                 // some other possible URL formats too as a backup.
                 url: 'https://docs.aws.amazon.com/'+epp[epp.length-1]+'/'
             };
-            s.host = src.metadata.endpointPrefix+'.amazonaws.com';
-            s.basePath = '/';
-            s.schemes = ['https']; // GitHub issue #3
-            s['x-servers'] = buildServers(
+            s.servers = buildServers(
                 src.metadata.endpointPrefix,
                 src.metadata.serviceAbbreviation || src.metadata.serviceFullName,
                 options.regionConfig
             );
 
             s['x-hasEquivalentPaths'] = false; // may get removed later
-            s.consumes = [];
-            s.produces = [];
 
-            s.parameters = {};
+            s.paths = {};
+            s.components = { parameters: {}, securitySchemes: {}, schemas: {} };
 
-            s.securityDefinitions = {};
-            s.securityDefinitions.hmac = {};
-            s.securityDefinitions.hmac.type = 'apiKey';
-            s.securityDefinitions.hmac.name = 'Authorization';
-            s.securityDefinitions.hmac["in"] = 'header';
+            s.components.securitySchemes = {};
+            s.components.securitySchemes.hmac = {};
+            s.components.securitySchemes.hmac.type = 'apiKey';
+            s.components.securitySchemes.hmac.name = 'Authorization';
+            s.components.securitySchemes.hmac["in"] = 'header';
 
             var signatureVersion = null;
 
             if (src.metadata.signatureVersion) {
                 if ((src.metadata.signatureVersion == 'v4') || (src.metadata.signatureVersion === 's3v4')) {
-                    s.securityDefinitions.hmac.description = 'Amazon Signature authorization v4';
-                    s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv4';
+                    s.components.securitySchemes.hmac.description = 'Amazon Signature authorization v4';
+                    s.components.securitySchemes.hmac["x-amazon-apigateway-authtype"] = 'awsSigv4';
                     signatureVersion = 4;
 
                     for (var h in amzHeaders) {
                         var header = {};
                         header.name = amzHeaders[h];
                         header["in"] = 'header';
-                        header.type = 'string';
+                        header.schema = { type: 'string' };
                         header.required = false;
-                        s.parameters[amzHeaders[h]] = header;
+                        s.components.parameters[amzHeaders[h]] = header;
                     }
 
                 }
                 else if (src.metadata.signatureVersion == 's3') {
-                    s.securityDefinitions.hmac.description = 'Amazon S3 signature';
-                    s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsS3';
+                    s.components.securitySchemes.hmac.description = 'Amazon S3 signature';
+                    s.components.securitySchemes.hmac["x-amazon-apigateway-authtype"] = 'awsS3';
                     signatureVersion = 3;
 
                     // https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
@@ -860,13 +872,13 @@ module.exports = {
                         header["in"] = 'header';
                         header.type = 'string';
                         header.required = false;
-                        s.parameters[s3Headers[h]] = header;
+                        s.components.parameters[s3Headers[h]] = header;
                     }
 
                 }
                 else if (src.metadata.signatureVersion == 'v2') {
-                    s.securityDefinitions.hmac.description = 'Amazon Signature authorization v2';
-                    s.securityDefinitions.hmac["x-amazon-apigateway-authtype"] = 'awsSigv2';
+                    s.components.securitySchemes.hmac.description = 'Amazon Signature authorization v2';
+                    s.components.securitySchemes.hmac["x-amazon-apigateway-authtype"] = 'awsSigv2';
                     signatureVersion = 2;
 
                     // https://docs.aws.amazon.com/general/latest/gr/signature-version-2.html
@@ -875,9 +887,9 @@ module.exports = {
                         var param = {};
                         param.name = v2Params[p];
                         param["in"] = 'query';
-                        param.type = 'string';
+                        param.schema = { type: 'string' };
                         param.required = true;
-                        s.parameters[v2Params[p]] = param;
+                        s.components.parameters[v2Params[p]] = param;
                     }
                 }
                 else {
@@ -897,19 +909,16 @@ module.exports = {
                 protocol == 'json' ||
                 (protocol == 'query' && src.metadata.jsonVersion)
             ) {
-                s.consumes.push('application/json');
-                s.produces.push('application/json');
+                consumes.push('application/json');
+                produces.push('application/json');
             }
             if (
                 protocol == 'rest-xml' ||
                 (protocol == 'query' && src.metadata.xmlNamespace)
             ) {
-                s.consumes.push('text/xml');
-                s.produces.push('text/xml');
+                consumes.push('text/xml');
+                produces.push('text/xml');
             }
-
-            s.paths = {};
-            s.definitions = {};
 
             // EC2/Query protocol operations are all valid as either GET or POST, so in
             // those cases we duplicate every operation, once for each method
@@ -926,9 +935,9 @@ module.exports = {
                 if (op.deprecated) action.deprecated = true;
 
                 if (op.http) {
-                    if (s.schemes.indexOf('http')<0) {
-                        s.schemes.push('http');
-                    }
+                    //if (s.schemes.indexOf('http')<0) { // TODO FIXME ?
+                    //    s.schemes.push('http');
+                    //}
                     var method = op.http.method.toLocaleLowerCase();
                     if (protocol === 'ec2' || protocol === 'query') {
                         action['x-aws-operation-name'] = op.name; // Save separately, for reference elsewhere
@@ -946,8 +955,12 @@ module.exports = {
                     var success = {};
                     success.description = 'Success';
                     if (op.output && op.output.shape) {
-                        success.schema = {};
-                        success.schema["$ref"] = '#/definitions/'+op.output.shape;
+                        success.content = {};
+                        for (let mediatype of produces) {
+                            success.content[mediatype] = {};
+                            success.content[mediatype].schema = {};
+                            success.content[mediatype].schema.$ref = '#/components/schemas/'+op.output.shape;
+                        }
                         checkDef(s,op.output.shape);
 
                         if (options.examples && options.examples.examples[op.name]) {
@@ -962,7 +975,7 @@ module.exports = {
                     action.responses[op.http.responseCode ? op.http.responseCode : 200] = success;
                 }
 
-                attachParameters(s, src, op, action, options);
+                attachParameters(s, src, op, action, consumes, options);
 
                 var defStatus = 480;
                 for (var e in op.errors) {
@@ -970,8 +983,12 @@ module.exports = {
                     var failure = {};
                     failure.description = (error.description ? clean(error.documentation) : error.shape);
                     if (error.exception) failure["x-aws-exception"] = error.exception;
-                    failure.schema = {};
-                    failure.schema["$ref"] = '#/definitions/'+error.shape;
+                    failure.content = {};
+                    for (let mediatype of produces) {
+                        failure.content[mediatype] = {};
+                        failure.content[mediatype].schema = {};
+                        failure.content[mediatype].schema.$ref = '#/components/schemas/'+error.shape;
+                    }
                     checkDef(s,error.shape);
                     action.responses[error.error ? error.error.httpStatusCode : defStatus++] = failure; //TODO fake statuses created. Map to combined output schema with a 'oneOf'?
                 }
@@ -993,14 +1010,14 @@ module.exports = {
                             name: 'AccountNumber',
                             required: true,
                             description: 'The AWS account number',
-                            type: 'integer'
+                            schema: { type: 'integer' }
                         });
                         action.parameters.push({
                             in: 'path',
                             name: 'QueueName',
                             required: true,
                             description: 'The name of the queue',
-                            type: 'string'
+                            schema: { type: 'string' }
                         });
 
                         // Remove the QueueUrl param (this path replaces it)
@@ -1085,15 +1102,19 @@ module.exports = {
                                 name: 'Action',
                                 in: 'query',
                                 required: true,
-                                type: 'string',
-                                enum: [op.name]
+                                schema: {
+                                    type: 'string',
+                                    enum: [op.name]
+                                }
                             },
                             {
                                 name: 'Version',
                                 in: 'query',
                                 required: true,
-                                type: 'string',
-                                enum: [src.metadata.apiVersion]
+                                schema: {
+                                    type: 'string',
+                                    enum: [src.metadata.apiVersion]
+                                }
                             }
                         ]);
                         break;
@@ -1106,8 +1127,10 @@ module.exports = {
                             name: 'X-Amz-Target',
                             in: 'header',
                             required: true,
-                            type: 'string',
-                            enum: [amzTarget]
+                            schema: {
+                                type: 'string',
+                                enum: [amzTarget]
+                            }
                         });
                         break;
 
@@ -1147,7 +1170,7 @@ module.exports = {
 
                 shape = transformShape(s,shape);
 
-                s.definitions[d] = shape;
+                s.components.schemas[d] = shape;
             }
 
             postProcess(s,options);
