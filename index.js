@@ -164,6 +164,10 @@ function buildServers(endpointPrefix, serviceName, awsRegionConfig) {
             };
         }
 
+        for (let v in variables) {
+            variables[v].default = variables[v].enum[0];
+        }
+
         return { url, variables, description };
     });
 }
