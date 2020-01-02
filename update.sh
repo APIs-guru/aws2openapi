@@ -1,12 +1,22 @@
 #!/bin/sh
 cd $(dirname $0)
-cd ../aws-sdk-js
-git pull
-cd ../aws2openapi
-. ./processYaml.sh
-if [ "$?" -eq "0" ]; then
-  cd ../openapi-directory/APIs
-  git add amazonaws.com
-  git commit -m "Update AWS APIs"
-  git push
+expbranch="$1"
+if [ "$expbranch" = "" ]; then
+  expbranch=master
+fi
+branch=`git symbolic-ref --short HEAD`
+if [ "$branch" = "$expbranch" ]; then
+  cd ../aws-sdk-js
+  git pull
+  tag=`git describe --tags`
+  cd ../aws2openapi
+  . ./processYaml.sh
+  if [ "$?" -eq "0" ]; then
+    cd ../openapi-directory/APIs
+    git add amazonaws.com
+    git commit -m "Update AWS APIs to $tag"
+    git push
+  fi
+else
+  echo Current branch $branch does not match expected $expbranch
 fi
