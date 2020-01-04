@@ -784,7 +784,7 @@ module.exports = {
             s.info['x-serviceName'] = src.metadata.endpointPrefix;
 
             var xorigin = [];
-            var origin = {contentType:'application/json',url:'https://raw.githubusercontent.com/aws/aws-sdk-js/master/apis/'+options.filename,converter:{url:'https://github.com/mermade/aws2openapi',version:ourVersion},'x-apisguru-direct': true};
+            var origin = {contentType:'application/json',url:'https://raw.githubusercontent.com/aws/aws-sdk-js/master/apis/'+options.filename,converter:{url:'https://github.com/mermade/aws2openapi',version:ourVersion},'x-apisguru-driver': 'external'};
             xorigin.push(origin);
             s.info['x-origin'] = xorigin;
 
