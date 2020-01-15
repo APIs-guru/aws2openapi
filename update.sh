@@ -5,7 +5,9 @@ if [ "$expbranch" = "" ]; then
   expbranch=master
 fi
 branch=`git symbolic-ref --short HEAD`
+echo Checking if branch $branch is expected $expbranch
 if [ "$branch" = "$expbranch" ]; then
+  echo Pulling latest changes...
   cd ../aws-sdk-js
   git pull
   tag=`git describe --tags`
