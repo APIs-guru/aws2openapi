@@ -202,7 +202,7 @@ function attachHeader(openapi,shapeName,header){
         }
         var header = {};
         header.description = '';
-        header.type = 'string';
+        header.schema = { type: 'string' };
         response.headers[header.locationName] = header;
     }
 }
@@ -324,8 +324,9 @@ function transformShape(openapi,shape){
         shape.additionalProperties = {
             '$ref': '#/components/schemas/'+shape.value.shape
         };
-        // TODO In OpenAPI 3, we could use propertyNames/Patterns here, and use the shape.key.shape to
-        // only allow valid keys. For now we allow any string.
+        // TODO In OpenAPI 3.1+, we could use propertyNames/Patterns here, and
+        // use the shape.key.shape to only allow valid keys. For now we allow
+        // any string.
 
         checkDef(openapi,shape.value.shape);
         delete shape.key;
@@ -435,10 +436,11 @@ function transformShape(openapi,shape){
             delete obj.queryName; // TODO ec2 only
         }
         if (key == 'streaming') {
-            delete obj.streaming; // TODO revisit this for OpenApi 3.x ?
+            delete obj.streaming; // TODO
         }
         if (key == 'deprecated') {
-            delete obj.deprecated; // TODO revisit this for OpenApi 3.x ?
+          // if boolean, it's a property which maps to OAS schemaObject
+          // deprecated ok, if an Object it's a property of the shape/schema
         }
         if (key == 'deprecatedMessage') {
             if (!obj.description) {
@@ -539,6 +541,7 @@ function attachParameters(openapi, src, op, action, consumes, options) {
         // Build parameters details for these params, according to the
         // standard approach for each protocol.
         const paramShape = src.shapes[op.input.shape];
+        paramShape.title = op.input.shape;
 
         switch (src.metadata.protocol) {
             case 'rest-xml':
@@ -601,14 +604,14 @@ function attachParameters(openapi, src, op, action, consumes, options) {
 
             case 'query':
             case 'ec2':
-                // Serialises all params, into a query string for GET or formData for POST
-                action.parameters = _.map(paramShape.members, (member, name) => _.omitBy({
+                // Serialises all params, into a query string for GET or requestBody for POST
+                if (op.http.method === 'GET') action.parameters = _.map(paramShape.members, (member, name) => _.omitBy({
                     name: src.metadata.protocol === 'ec2'
                         // EC2 uppercases the first char of param names, unless there's a queryName
                         // is provided. See query_param_serializer's ucfirst() in the AWS SDK.
                         ? member.queryName || _.upperFirst(member.locationName || name)
                         : member.locationName || name,
-                    in: op.http.method === 'POST' ? 'formData' : 'query',
+                    in: op.http.method === 'POST' ? 'body' : 'query',
                     required: _.includes(paramShape.required, name),
                     description: clean(member.documentation || ''),
                     schema: {
@@ -616,7 +619,13 @@ function attachParameters(openapi, src, op, action, consumes, options) {
                             transformShape(openapi, src.shapes[member.shape]) : {}
                         )
                     }
-                }, _.isUndefined));
+                }, _.isUndefined))
+                else {
+                  action.requestBody = { content: {} };
+                  for (let mediatype of consumes) {
+                    action.requestBody.content[mediatype] = { schema: { $ref: '#/components/schemas/'+op.input.shape } };
+                  }
+                }
                 break;
 
             case 'json':
@@ -638,12 +647,12 @@ function attachParameters(openapi, src, op, action, consumes, options) {
             // Any list parameters need to be filtered to just param-valid properties
             // Any object query params need to be converted into their flattened forms
 
-            if (param.in !== 'query' && param.in !== 'formData') {
+            if (param.in !== 'query' && param.in !== 'body') {
                 return param;
             }
 
             if (param.additionalProperties) {
-                // A 'map' (in AWS terms)
+                // A 'map' (in AWS terms) // TODO
 
                 // These effectively allow wildcard parameters. We can't represent this properly
                 // until OpenAPI 3, but in the short term we can enumerate N examples
@@ -870,8 +879,8 @@ module.exports = {
                         var header = {};
                         header.name = s3Headers[h];
                         header["in"] = 'header';
-                        header.type = 'string';
                         header.required = false;
+                        header.schema = { type: 'string' };
                         s.components.parameters[s3Headers[h]] = header;
                     }
 
@@ -1048,17 +1057,18 @@ module.exports = {
                         param.name = p.split('=')[0];
                         param.in = 'query';
                         param.required = true;
+                        param.schema = {};
                         let val = p.split('=')[1];
                         if (val) {
-                            param.type = 'string';
-                            param.enum = [val];
+                            param.schema.type = 'string';
+                            param.schema.enum = [val];
                         }
                         else {
                             // A slightly funky way to describe a empty ONLY value
                             // that must always be present (with required=true above)
-                            param.type = 'boolean';
                             param.allowEmptyValue = true;
-                            param.enum = [true];
+                            param.schema.type = 'boolean';
+                            param.schema.enum = [true];
                         }
                         //console.log('Hardcoded param',param.name);
                         action.parameters.push(param);
@@ -1073,6 +1083,7 @@ module.exports = {
                 if (op.input && op.input.shape) {
                     // Add any other required query params to the URL fragment too
                     const paramShape = src.shapes[op.input.shape];
+                    paramShape.title = op.input.shape;
                     const requiredQueryParamNames = _.filter(paramShape.members, (member, memberName) =>
                         _.includes(['querystring', 'header', 'headers'], member.location) &&
                         _.includes(paramShape.required, memberName)
