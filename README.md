@@ -1,5 +1,5 @@
 # aws2openapi
-Amazon Web Services API description to OpenApi (Swagger) 2.0 specification
+Amazon Web Services API description to OpenAPI 3.0 specification
 
 ## Work in progress - beta quality
 
@@ -20,7 +20,7 @@ The results of this converter can be found [here](https://github.com/APIs-guru/o
 * ~~Examples~~
 * ~~Waiters~~ (as vendor extension)
 * Test against live endpoints
-* Verify output header mappings 
+* Verify output header mappings
 * Test path-with-fragment hack works
 * Test paths with hardcoded ?parameters work
 * Validate xml-handling keyword translations
