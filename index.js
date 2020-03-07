@@ -1,10 +1,10 @@
-var _ = require('lodash');
-var recurse = require('reftools/lib/recurse.js').recurse;
+const _ = require('lodash');
+const recurse = require('reftools/lib/recurse.js').recurse;
 
-var awsRegions = require('aws-regions');
+const awsRegions = require('aws-regions');
 
-var ourVersion = require('./package.json').version;
-var actions = ['get','post','put','patch','delete','head','options','trace'];
+const ourVersion = require('./package.json').version;
+const actions = ['get','post','put','patch','delete','head','options','trace'];
 
 /*
 https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
@@ -16,7 +16,8 @@ const amzHeaders = ['X-Amz-Content-Sha256','X-Amz-Date','X-Amz-Algorithm','X-Amz
 const s3Headers = ['x-amz-security-token'];
 const v2Params = ['AWSAccessKeyId', 'Action', 'SignatureMethod', 'SignatureVersion', 'Timestamp', 'Version', 'Signature'];
 
-var multiParams = [];
+let isXmlApi = false;
+let multiParams = [];
 
 /**
 Removes starting and ending <p></p> markup if no other <p>'s exist
@@ -315,6 +316,9 @@ function transformShape(openapi,shape){
         rename(shape,'member','items');
         rename(shape,'min','minItems');
         rename(shape,'max','maxItems');
+        if (isXmlApi) { // issue #28
+          if (!shape.items.xml) shape.items.xml = { name: 'member' };
+        }
     }
 
     if (shape.type == 'map') {
@@ -927,6 +931,7 @@ module.exports = {
             ) {
                 consumes.push('text/xml');
                 produces.push('text/xml');
+                isXmlApi = true;
             }
 
             // EC2/Query protocol operations are all valid as either GET or POST, so in
