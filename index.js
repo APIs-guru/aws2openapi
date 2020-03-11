@@ -16,7 +16,7 @@ const amzHeaders = ['X-Amz-Content-Sha256','X-Amz-Date','X-Amz-Algorithm','X-Amz
 const s3Headers = ['x-amz-security-token'];
 const v2Params = ['AWSAccessKeyId', 'Action', 'SignatureMethod', 'SignatureVersion', 'Timestamp', 'Version', 'Signature'];
 
-let isXmlApi = false;
+let xmlQuery = false;
 let multiParams = [];
 
 /**
@@ -316,7 +316,7 @@ function transformShape(openapi,shape){
         rename(shape,'member','items');
         rename(shape,'min','minItems');
         rename(shape,'max','maxItems');
-        if (isXmlApi) { // issue #28
+        if (xmlQuery) { // issue #28
           if (!shape.items.xml) shape.items.xml = { name: 'member' };
         }
     }
@@ -925,13 +925,10 @@ module.exports = {
                 consumes.push('application/json');
                 produces.push('application/json');
             }
-            if (
-                protocol == 'rest-xml' ||
-                (protocol == 'query' && src.metadata.xmlNamespace)
-            ) {
+            xmlQuery = (protocol == 'query' && src.metadata.xmlNamespace);
+            if (protocol == 'rest-xml' || xmlQuery) {
                 consumes.push('text/xml');
                 produces.push('text/xml');
-                isXmlApi = true;
             }
 
             // EC2/Query protocol operations are all valid as either GET or POST, so in
