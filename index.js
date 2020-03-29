@@ -16,8 +16,8 @@ const amzHeaders = ['X-Amz-Content-Sha256','X-Amz-Date','X-Amz-Algorithm','X-Amz
 const s3Headers = ['x-amz-security-token'];
 const v2Params = ['AWSAccessKeyId', 'Action', 'SignatureMethod', 'SignatureVersion', 'Timestamp', 'Version', 'Signature'];
 
-let xmlQuery = false;
-let multiParams = [];
+let xmlQuery = false; // needs to be reinitialised per conversion
+let multiParams = []; // needs to be reinitialised per conversion
 
 /**
 Removes starting and ending <p></p> markup if no other <p>'s exist
@@ -790,6 +790,8 @@ module.exports = {
             var err = {};
             const produces = [];
             const consumes = [];
+            let multiParams = []; // reinitialise global var
+            let xmlQuery = false; // reinitialise global var
             var s = {};
             s.openapi = "3.0.0";
             s.info = {};
