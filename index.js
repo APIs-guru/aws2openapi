@@ -954,7 +954,7 @@ module.exports = {
                     var method = op.http.method.toLocaleLowerCase();
                     if (protocol === 'ec2' || protocol === 'query') {
                         action['x-aws-operation-name'] = op.name; // Save separately, for reference elsewhere
-                        action.operationId = method.toUpperCase() + ' ' + op.name;
+                        action.operationId = method.toUpperCase() + '_' + op.name;
                     } else {
                         action.operationId = op.name; // TODO not handled is 'alias', add as a vendor extension if necessary
                     }
