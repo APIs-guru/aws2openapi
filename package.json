@@ -21,14 +21,11 @@
     "aws-regions": "^2.0.0",
     "js-yaml": "^3.13.1",
     "lodash": "^4.17.15",
-    "oas-validator": "^3.3.3",
+    "oas-validator": "^3.4.0",
     "recursive-readdir": "^2.1.0",
-    "reftools": "^1.0.4"
+    "reftools": "^1.1.1"
   },
-  "devDependencies": {
-    "is-my-json-valid": "latest",
-    "swagger-parser": "latest"
-  },
+  "devDependencies": {},
   "directories": {
     "doc": "docs"
   },

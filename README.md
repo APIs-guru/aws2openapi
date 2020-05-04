@@ -5,7 +5,7 @@ Amazon Web Services API description to OpenAPI 3.0 specification
 
 ### Handles all current (v2) AWS json and xml specifications
 
-Resultant OpenApi specifications [pass](https://github.com/OAI/OpenAPI-Specification/blob/master/schemas/v2.0/schema.json) [multiple](https://github.com/apigee-127/sway) [validators](https://github.com/BigstickCarpet/swagger-parser)
+Resultant OpenApi specifications pass [multiple](https://github.com/OAI/OpenAPI-Specification/blob/master/schemas/v3.0/schema.yaml) [validators](https://github.com/Mermade/oas-kit)
 
 ![screenshot](https://mermade.github.io/aws2openapi/screenshot.png)
 

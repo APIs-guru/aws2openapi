@@ -3,16 +3,12 @@
 const fs = require('fs');
 const path = require('path');
 const oasv = require('oas-validator');
-const validator = require('is-my-json-valid');
 const rr = require('recursive-readdir');
 const yaml = require('js-yaml');
 const aws2oa = require('./index.js');
 const helpers = require('./helpers.js');
 
-const openapiSchema = require('./validation/openapi-30.json');
 var preferred = require('./preferred.json');
-
-const validate = validator(openapiSchema);
 
 function doit(input, regionConfig) {
 	var outputDir = (process.argv.length>3 ? process.argv[3] : './aws/');
@@ -55,26 +51,14 @@ function doit(input, regionConfig) {
 			console.log(JSON.stringify(err));
 		}
 		if (openapi) {
-
-            oasv.validate(openapi, { text: '{}' })
+            oasv.validate(openapi, { validateSchema: 'never', text: '{}' })
             .then(options => {
-              // fine
+	          process.stdout.write('.');
             })
             .catch(ex => {
               console.error(aws.metadata.uid, ex.message);
 			  process.exitCode = 1;
             });
-
-			//validate(openapi,{
-			//	//greedy: true,
-			//	verbose: true
-			//});
-			//var errors = validate.errors;
-			//if (errors) {
-			//	console.log(input);
-			//	console.log('Failed validation (simple): %s',input);
-			//	console.log(errors);
-			//}
 
             var version = filename.replace(prefix+'-','');
 
