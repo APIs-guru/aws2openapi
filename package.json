@@ -4,7 +4,9 @@
   "description": "Amazon Web Service API description to OpenApi 2.0 format",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "snyk-protect": "snyk protect",
+    "prepare": "npm run snyk-protect"
   },
   "keywords": [
     "openapi",
@@ -23,7 +25,8 @@
     "lodash": "^4.17.15",
     "oas-validator": "^3.4.0",
     "recursive-readdir": "^2.1.0",
-    "reftools": "^1.1.1"
+    "reftools": "^1.1.1",
+    "snyk": "^1.319.0"
   },
   "devDependencies": {},
   "directories": {
@@ -36,5 +39,6 @@
   "bugs": {
     "url": "https://github.com/mermade/aws2openapi/issues"
   },
-  "homepage": "https://github.com/mermade/aws2openapi#readme"
+  "homepage": "https://github.com/mermade/aws2openapi#readme",
+  "snyk": true
 }
