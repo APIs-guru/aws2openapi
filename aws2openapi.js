@@ -53,7 +53,6 @@ function doit(input, regionConfig) {
 		if (openapi) {
             oasv.validate(openapi, { validateSchema: 'never', text: '{}' })
             .then(options => {
-	          process.stdout.write('.');
             })
             .catch(ex => {
               console.error(aws.metadata.uid, ex.message);
