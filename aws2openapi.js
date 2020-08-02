@@ -51,7 +51,7 @@ function doit(input, regionConfig) {
 			console.log(JSON.stringify(err));
 		}
 		if (openapi) {
-            oasv.validate(openapi, { validateSchema: 'never', text: '{}' })
+            oasv.validate(openapi, { laxurls: true, validateSchema: 'never', text: '{}' })
             .then(options => {
             })
             .catch(ex => {
