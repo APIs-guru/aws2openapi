@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 1
       - name: 🍳 Update
         run: |
-          git clone --depth 1 https://github.com/apis-guru/openapi-directory
+          git clone https://github.com/apis-guru/openapi-directory
           git clone --depth 1 https://github.com/aws/aws-sdk-js
           npm i
           node getPreferred ./aws-sdk-js/apis
