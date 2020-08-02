@@ -1,0 +1,36 @@
+name: update-readme
+
+# originally based on https://github.com/victoriadrake/victoriadrake/blob/master/.github/workflows/update.yaml
+
+on:
+  push:
+    branches:
+      - master
+  schedule:
+    - cron: '0 19 * * *'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🍽️ Get working copy
+        uses: actions/checkout@master
+        with:
+          fetch-depth: 1
+      - name: 🍳 Update
+        run: |
+          git clone --depth 1 https://github.com/apis-guru/openapi-directory
+          git clone --depth 1 https://github.com/aws/aws-sdk-js
+          npm i
+          node getPreferred ./aws-sdk-js/apis
+          node aws2openapi ./aws-sdk-js/apis ./openapi-directory/APIs/amazonaws.com -y
+      - name: 🚀 Deploy
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          cd openapi-directory/APIs
+          git add amazonaws.com
+          git diff-index --quiet HEAD || git commit -am "Update AWS APIs"
+          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/apis-guru/openapi-directory.git
+
