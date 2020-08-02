@@ -32,5 +32,5 @@ jobs:
           cd openapi-directory/APIs
           git add amazonaws.com
           git diff-index --quiet HEAD || git commit -am "Update AWS APIs"
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/apis-guru/openapi-directory.git
+          git push https://${{ secrets.GH_PAT }}@github.com/apis-guru/openapi-directory.git
 
