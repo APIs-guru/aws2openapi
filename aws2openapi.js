@@ -129,14 +129,15 @@ function getRegionConfig(awsRoot) {
 let inputspec = process.argv[2];
 if (inputspec) {
     inputspec = path.resolve(inputspec);
-    const awsRoot = path.dirname(inputspec); // We require the given AWS spec to always be one dir down from the SDK root
-    const regionConfig = getRegionConfig(awsRoot);
-
+    let awsRoot = path.dirname(inputspec); // We require the given AWS spec to always be one dir down from the SDK root
     const stats = fs.statSync(inputspec);
     if (stats.isFile()) {
-    	doit(inputspec, regionConfig);
+      awsRoot = path.resolve(awsRoot, '..');
+      const regionConfig = getRegionConfig(awsRoot);
+      doit(inputspec, regionConfig);
     }
     else {
+      const regionConfig = getRegionConfig(awsRoot);
       rr(inputspec, function(err, files) {
   	    for (var f in files) {
 	      const filename = files[f];
