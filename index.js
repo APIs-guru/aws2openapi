@@ -1,3 +1,5 @@
+const assert = require('assert');
+
 const _ = require('lodash');
 const recurse = require('reftools/lib/recurse.js').recurse;
 
@@ -419,7 +421,7 @@ function transformShape(openapi,shape){
             shape.xml.wrapped = !obj[key];
             delete obj.flattened;
         }
-        if (key == 'locationName') {
+        if ((key == 'locationName') && (typeof obj.locationName === 'string')) {
             delete obj.locationName;
         }
         if (key == 'payload') {
@@ -466,6 +468,14 @@ function transformShape(openapi,shape){
         }
         if (key === 'eventstream') {
             delete obj.eventstream;
+        }
+        if (typeof obj[key] === 'object' && obj[key].locationName &&
+            (typeof obj[key].locationName === 'string')) { // refs #36
+            const newKey = obj[key].locationName;
+            if (newKey !== key) {
+                obj[key].xml = { name: newKey };
+            }
+            delete obj[key].locationName;
         }
     });
 
@@ -919,19 +929,18 @@ module.exports = {
 
             const protocol = src.metadata.protocol;
 
-            if (
-                protocol == 'rest-json' ||
+            if (protocol == 'rest-json' ||
                 protocol == 'json' ||
-                (protocol == 'query' && src.metadata.jsonVersion)
-            ) {
+                (protocol == 'query' && src.metadata.jsonVersion)) {
                 consumes.push('application/json');
                 produces.push('application/json');
             }
             xmlQuery = (protocol == 'query' && src.metadata.xmlNamespace);
-            if (protocol == 'rest-xml' || xmlQuery) {
+            if (protocol == 'rest-xml' || protocol === 'ec2' || xmlQuery) {
                 consumes.push('text/xml');
                 produces.push('text/xml');
             }
+            assert(produces && produces.length,'No mediatypes: '+protocol);
 
             // EC2/Query protocol operations are all valid as either GET or POST, so in
             // those cases we duplicate every operation, once for each method
