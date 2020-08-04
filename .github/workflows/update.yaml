@@ -27,8 +27,8 @@ jobs:
           node aws2openapi ./aws-sdk-js/apis ./openapi-directory/APIs/amazonaws.com -y
       - name: 🚀 Deploy
         run: |
-          git config user.name "${GITHUB_ACTOR}"
-          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git config user.name "Mike Ralphson"
+          git config user.email "MikeRalphson@users.noreply.github.com"
           cd openapi-directory/APIs
           git add amazonaws.com
           git diff-index --quiet HEAD || git commit -am "Update AWS APIs"
