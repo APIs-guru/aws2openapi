@@ -24,7 +24,7 @@ jobs:
           git clone https://github.com/apis-guru/openapi-directory
           git clone --depth 1 https://github.com/aws/aws-sdk-js
           cd aws-sdk-js
-          export tag=`git describe --tags`
+          echo "::set-env name=SDKTAG::`git describe --tags`"
           cd ..
           npm i
           node getPreferred ./aws-sdk-js/apis
@@ -35,6 +35,6 @@ jobs:
           git config user.name "Mike Ralphson"
           git config user.email "MikeRalphson@users.noreply.github.com"
           git add amazonaws.com
-          git diff-index --quiet HEAD || git commit -am "Update AWS APIs to $tag"
+          git diff-index --quiet HEAD || git commit -am "Update AWS APIs to $SDKTAG"
           git push https://${{ secrets.GH_PAT }}@github.com/apis-guru/openapi-directory.git
 
