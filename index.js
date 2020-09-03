@@ -477,6 +477,13 @@ function transformShape(openapi,shape){
             }
             delete obj[key].locationName;
         }
+
+        // do this last, refs #41
+        if ((typeof obj.$ref === 'string') && (Object.keys(obj).length > 1) && (!obj.allOf)) {
+            const $ref = obj.$ref;
+            delete obj.$ref;
+            state.parent[state.pkey] = { allOf: [ { $ref }, obj ] };
+        }
     });
 
     return shape;
