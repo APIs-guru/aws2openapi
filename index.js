@@ -477,11 +477,15 @@ function transformShape(openapi,shape){
             }
             delete obj[key].locationName;
         }
+    });
 
-        // do this last, refs #41
-        if ((typeof obj.$ref === 'string') && (Object.keys(obj).length > 1) && (!obj.allOf)) {
+    recurse(shape,{},function(obj,key,state){
+        // do this in separate pass, refs #41
+        if ((key === '$ref') && (typeof obj.$ref === 'string') && (Object.keys(obj).length > 1) && (!obj.allOf)) {
             const $ref = obj.$ref;
             delete obj.$ref;
+            delete obj.tags; // were previously being ignored as siblings of a $ref
+            delete obj.location;
             state.parent[state.pkey] = { allOf: [ { $ref }, obj ] };
         }
     });
