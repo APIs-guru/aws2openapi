@@ -379,7 +379,7 @@ function transformShape(openapi,shape){
         if ((key == 'location') && (obj[key] == 'statusCode')) {
             delete obj[key]; // should already be pointed to by 'output'
         }
-        if ((key == 'location') && (obj[key] == 'header')) {
+        if ((key == 'location') && ((obj[key] == 'header') || (obj[key] == 'headers'))) {
             var header = obj[key]; // JRM clone
             var newHeader = _.cloneDeep(header);
 
