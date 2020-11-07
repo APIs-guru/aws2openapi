@@ -355,6 +355,10 @@ function transformShape(openapi,shape){
         delete shape.flattened;
     }
 
+    if (typeof shape.union === 'boolean') {
+      delete shape.union;
+    }
+
     delete shape.exception;
     delete shape.fault;
     delete shape.error;
