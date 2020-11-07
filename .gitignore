@@ -1,3 +1,4 @@
 aws-sdk-js/
+aws/
 *.json
 node_modules/
