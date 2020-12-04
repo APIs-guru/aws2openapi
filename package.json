@@ -21,9 +21,9 @@
     "aws-regions": "^2.2.0",
     "js-yaml": "^3.14.0",
     "lodash": "^4.17.20",
-    "oas-validator": "^5.0.3",
+    "oas-validator": "^5.0.4",
     "recursive-readdir": "^2.1.0",
-    "reftools": "^1.1.6"
+    "reftools": "^1.1.7"
   },
   "devDependencies": {},
   "directories": {

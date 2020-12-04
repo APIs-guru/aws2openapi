@@ -445,8 +445,11 @@ function transformShape(openapi,shape){
         if (key == 'queryName') {
             delete obj.queryName; // TODO ec2 only
         }
-        if (key == 'streaming') {
+        if (typeof obj.streaming === 'boolean') {
             delete obj.streaming; // TODO
+        }
+        if (typeof obj.requiresLength === 'boolean') {
+            delete obj.requiresLength; // TODO
         }
         if (key == 'deprecated') {
           // if boolean, it's a property which maps to OAS schemaObject
@@ -851,7 +854,6 @@ module.exports = {
             var prefEntry = options.preferred.find(function(e,i,a){
                 return e.serviceName === options.serviceName;
             });
-            console.log(JSON.stringify(prefEntry));
             if (prefEntry) preferred = (prefEntry.preferred == src.metadata.apiVersion);
             s.info['x-preferred'] = preferred;
 
