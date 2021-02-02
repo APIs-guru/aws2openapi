@@ -841,7 +841,7 @@ module.exports = {
             s.info.license.url = 'http://www.apache.org/licenses/';
             s.info['x-providerName'] = 'amazonaws.com';
             s.info['x-serviceName'] = src.metadata.endpointPrefix;
-            s.info['x-aws-signingName'] = src.metadata.signingName;
+            if (src.metadata.signingName) s.info['x-aws-signingName'] = src.metadata.signingName;
 
             var xorigin = [];
             var origin = {contentType:'application/json',url:'https://raw.githubusercontent.com/aws/aws-sdk-js/master/apis/'+options.filename,converter:{url:'https://github.com/mermade/aws2openapi',version:ourVersion},'x-apisguru-driver': 'external'};
