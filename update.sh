@@ -10,7 +10,7 @@ if [ "$branch" = "$expbranch" ]; then
   echo Pulling latest changes...
   cd ../aws-sdk-js
   git pull
-  tag=`git describe --tags`
+  tag=`git describe --abbrev=0 --tags`
   cd ../aws2openapi
   . ./processYaml.sh
   if [ "$?" -eq "0" ]; then
