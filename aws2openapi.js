@@ -55,6 +55,10 @@ function doit(input, regionConfig) {
             .then(options => {
             })
             .catch(ex => {
+              if (ex.options && ex.options.context) {
+                const errorLocation = ex.options.context.pop();
+                console.error('@',errorLocation);
+              }
               console.error(aws.metadata.uid, ex.message);
 			  process.exitCode = 1;
             });
