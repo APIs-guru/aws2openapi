@@ -60,10 +60,10 @@ function rename(obj,key,newKey){
     }
 }
 
-function checkDef(openapi,name) {
-    if (!openapi.components.schemas[name]) {
-        //console.log('Forcing definition of:',name);
-        openapi.components.schemas[name] = {};
+function checkDef(openapi,container) {
+    assert.equal(typeof container.shape,'string');
+    if (!openapi.components.schemas[container.shape]) {
+        openapi.components.schemas[container.shape] = {};
     }
 }
 
@@ -334,7 +334,7 @@ function transformShape(openapi,shape){
         // use the shape.key.shape to only allow valid keys. For now we allow
         // any string.
 
-        checkDef(openapi,shape.value.shape);
+        checkDef(openapi,shape.value);
         delete shape.key;
         delete shape.value;
     }
@@ -369,9 +369,11 @@ function transformShape(openapi,shape){
 
     recurse(shape,{},function(obj,key,state){
         if (key == 'shape') {
-            obj["$ref"] = '#/components/schemas/'+obj[key];
-            checkDef(openapi,obj[key]);
-            delete obj[key];
+            if (state.pkey !== 'properties') {
+                obj["$ref"] = '#/components/schemas/'+obj[key];
+                checkDef(openapi,obj);
+            }
+            delete obj[key]; // TODO / FIXME validate this for runtime.lex.v2
         }
         if (key == 'documentation') {
             obj.description = clean(obj.documentation);
@@ -662,7 +664,7 @@ function attachParameters(openapi, src, op, action, consumes, options) {
 
             case 'json':
                 // All params are sent as a JSON object in the body
-                checkDef(openapi,op.input.shape);
+                checkDef(openapi,op.input);
                 action.requestBody = { required: true, content: {} };
                 for (let mediatype of consumes) {
                     action.requestBody.content[mediatype] = {
@@ -1001,7 +1003,7 @@ module.exports = {
                             success.content[mediatype].schema = {};
                             success.content[mediatype].schema.$ref = '#/components/schemas/'+op.output.shape;
                         }
-                        checkDef(s,op.output.shape);
+                        checkDef(s,op.output);
 
                         if (options.examples && options.examples.examples[op.name]) {
                             for (var e in options.examples.examples[op.name]) {
@@ -1029,7 +1031,7 @@ module.exports = {
                         failure.content[mediatype].schema = {};
                         failure.content[mediatype].schema.$ref = '#/components/schemas/'+error.shape;
                     }
-                    checkDef(s,error.shape);
+                    checkDef(s,error);
                     action.responses[error.error ? error.error.httpStatusCode : defStatus++] = failure; //TODO fake statuses created. Map to combined output schema with a 'oneOf'?
                 }
 
