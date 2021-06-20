@@ -7,7 +7,7 @@ Amazon Web Services API description to OpenAPI 3.0 specification
 
 Resultant OpenApi specifications pass [multiple](https://github.com/OAI/OpenAPI-Specification/blob/master/schemas/v3.0/schema.yaml) [validators](https://github.com/Mermade/oas-kit)
 
-![screenshot](https://mermade.github.io/aws2openapi/screenshot.png)
+![screenshot](https://raw.githubusercontent.com/APIs-guru/aws2openapi/main/docs/screenshot.png)
 
 The results of this converter can be found [here](https://github.com/APIs-guru/openapi-directory/tree/master/APIs/amazonaws.com)
 
