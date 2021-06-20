@@ -5,7 +5,7 @@ name: update-aws-apis
 on:
   push:
     branches:
-      - master
+      - main
   schedule:
     - cron: '0 19 * * *'
   workflow_dispatch: {}
@@ -37,4 +37,10 @@ jobs:
           git add amazonaws.com
           git diff-index --quiet HEAD || git commit -am "Update AWS APIs to $SDKTAG"
           git push https://${{ secrets.GH_PAT }}@github.com/apis-guru/openapi-directory.git
+      - name: Trigger oad CI
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.GH_PAT }}
+          repository: Mermade/oad
+          event-type: ci
 
