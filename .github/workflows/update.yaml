@@ -30,14 +30,16 @@ jobs:
           node getPreferred ./aws-sdk-js/apis
           node aws2openapi ./aws-sdk-js/apis ./openapi-directory/APIs/amazonaws.com -y
       - name: 🚀 Deploy
+        id: deploy
         run: |
           cd openapi-directory/APIs
           git config user.name "Mike Ralphson"
           git config user.email "MikeRalphson@users.noreply.github.com"
           git add amazonaws.com
-          git diff-index --quiet HEAD || git commit -am "Update AWS APIs to $SDKTAG"
+          git diff-index --quiet HEAD || git commit -am "Update AWS APIs to $SDKTAG" && echo "::set-output name=ok::1"
           git push https://${{ secrets.GH_PAT }}@github.com/apis-guru/openapi-directory.git
       - name: Trigger oad CI
+        if: ${{ steps.deploy.outputs.ok == '1' }}
         uses: peter-evans/repository-dispatch@v1
         with:
           token: ${{ secrets.GH_PAT }}
