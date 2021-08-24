@@ -490,18 +490,18 @@ function transformShape(openapi,shape){
 
     recurse(shape,{},function(obj,key,state){
         // do this in separate pass, refs #41
-        if ((key === '$ref') && (typeof obj.$ref === 'string') && (!obj.allOf)) {
-            const keys = Object.keys(obj);
-            if (keys.length === 2 && keys[1] === "description") {
-                return;
+        if ((key === '$ref') && (typeof obj.$ref === 'string') && (Object.keys(obj).length > 1) && (!obj.allOf)) {
+            const $ref = obj.$ref;
+            delete obj.$ref;
+            const description = obj.description
+            delete obj.description;
+            delete obj.tags; // were previously being ignored as siblings of a $ref
+            delete obj.location;
+            allOf = [ { $ref } ]
+            if (Object.keys(obj).length > 0) {
+                allOf.push(obj);
             }
-            if (keys.length > 1) {
-                const $ref = obj.$ref;
-                delete obj.$ref;
-                delete obj.tags; // were previously being ignored as siblings of a $ref
-                delete obj.location;
-                state.parent[state.pkey] = { allOf: [ { $ref }, obj ] };
-            }
+            state.parent[state.pkey] = { description, allOf };
         }
     });
 
