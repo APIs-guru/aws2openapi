@@ -453,6 +453,12 @@ function transformShape(openapi,shape){
         if (typeof obj.requiresLength === 'boolean') {
             delete obj.requiresLength; // TODO
         }
+        if (typeof obj.contextParam === 'object') {
+            delete obj.contextParam; // TODO
+        }
+        if (typeof obj.document === 'boolean') {
+            delete obj.document; // TODO
+        }
         if (key == 'deprecated') {
           // if boolean, it's a property which maps to OAS schemaObject
           // deprecated ok, if an Object it's a property of the shape/schema
