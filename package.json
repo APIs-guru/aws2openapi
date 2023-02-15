@@ -22,7 +22,7 @@
     "js-yaml": "^3.14.0",
     "lodash": "^4.17.21",
     "oas-validator": "^5.0.4",
-    "recursive-readdir": "^2.1.0",
+    "recursive-readdir": "^2.2.3",
     "reftools": "^1.1.7"
   },
   "devDependencies": {},
