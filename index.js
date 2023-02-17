@@ -499,9 +499,15 @@ function transformShape(openapi,shape){
         if ((key === '$ref') && (typeof obj.$ref === 'string') && (Object.keys(obj).length > 1) && (!obj.allOf)) {
             const $ref = obj.$ref;
             delete obj.$ref;
+            const description = obj.description
+            delete obj.description;
             delete obj.tags; // were previously being ignored as siblings of a $ref
             delete obj.location;
-            state.parent[state.pkey] = { allOf: [ { $ref }, obj ] };
+            allOf = [ { $ref } ]
+            if (Object.keys(obj).length > 0) {
+                allOf.push(obj);
+            }
+            state.parent[state.pkey] = { description, allOf };
         }
     });
 
